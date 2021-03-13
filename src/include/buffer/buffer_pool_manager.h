@@ -97,9 +97,6 @@ class BufferPoolManager {
   /** @return size of the buffer pool */
   size_t GetPoolSize() { return pool_size_; }
 
- private:
-  Page *ReplaceAndUpdate(page_id_t new_page_id, bool is_new_page, std::unique_lock<std::mutex>* lck);
-
  protected:
   /**
    * Grading function. Do not modify!

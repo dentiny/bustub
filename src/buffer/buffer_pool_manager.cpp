@@ -38,48 +38,6 @@ BufferPoolManager::~BufferPoolManager() {
   delete replacer_;
 }
 
-Page *BufferPoolManager::ReplaceAndUpdate(page_id_t new_page_id, bool is_new_page, unique_lock<mutex>* lck) {
-  assert(!free_list_.empty() || replacer_->Size() > 0);
-  Page *page = nullptr;
-  frame_id_t frame_idx;
-  if (!free_list_.empty()) {
-    frame_idx = free_list_.front();
-    free_list_.pop_front();
-    page_table_.emplace(new_page_id, frame_idx);
-    page = pages_ + frame_idx;
-    page->WLatch();
-    lck->unlock();
-    if (!is_new_page) {
-      disk_manager_->ReadPage(new_page_id, page->data_);
-    }
-  } else {
-    assert(replacer_->Victim(&frame_idx));  // victim_res is a placeholder
-    page = pages_ + frame_idx;
-    page_table_.erase(page->page_id_);
-    page_table_.emplace(new_page_id, frame_idx);
-    replacer_->Pin(frame_idx);
-    page->WLatch();
-    lck->unlock();
-
-    // If page dirty, flush original page to disk.
-    if (page->is_dirty_) {
-      disk_manager_->WritePage(page->page_id_, page->data_);
-    }
-    if (!is_new_page) {
-      disk_manager_->ReadPage(new_page_id, page->data_);
-    } else {
-      page->ResetMemory();
-    }
-  }
-
-  // Update target page's metadata.
-  page->page_id_ = new_page_id;
-  page->pin_count_ = 1;
-  page->is_dirty_ = is_new_page;
-  page->WUnlatch();
-  return page;
-}
-
 Page *BufferPoolManager::FetchPageImpl(page_id_t page_id) {
   // 1.     Search the page table for the requested page (P).
   // 1.1    If P exists, pin it and return it immediately.
@@ -89,7 +47,15 @@ Page *BufferPoolManager::FetchPageImpl(page_id_t page_id) {
   // 3.     Delete R from the page table and insert P.
   // 4.     Update P's metadata, read in the page content from disk, and then return a pointer to P.
 
-  // Target page already in the buffer pool, pin and return.
+  /*
+    Four cases:
+    (1) page already in the buffer pool
+    (2) page not in the buffer pool, but there's position in the free list
+    (3) no free page, so have to evict unpinned page in the buffer pool
+    (4) no unpinned page to evict, nothing to fetch
+  */
+
+  // case1: page already in the buffer pool
   unique_lock<mutex> lck(latch_);
   auto it = page_table_.find(page_id);
   if (it != page_table_.end()) {
@@ -100,28 +66,66 @@ Page *BufferPoolManager::FetchPageImpl(page_id_t page_id) {
     return targetPage;
   }
 
-  // If no page is available in the free list, and all other pages are
-  // currently pinned.
-  if (free_list_.empty() && replacer_->Size() == 0) {
-    return nullptr;
+  // case2: page not in the buffer pool, but there's position in the free list
+  if (!free_list_.empty()) {
+    frame_id_t frame_idx = free_list_.front();
+    free_list_.pop_front();
+    page_table_[page_id] = frame_idx;
+    Page *page = pages_ + frame_idx;
+    disk_manager_->ReadPage(page_id, page->data_);
+    page->page_id_ = page_id;
+    page->pin_count_ = 1;
+    page->is_dirty_ = false;
+    return page;
   }
 
-  return ReplaceAndUpdate(page_id, false, &lck);
+  // case3: no free page, so have to evict unpinned page in the buffer pool
+  frame_id_t victim_frame_id = INVALID_PAGE_ID;
+  if (replacer_->Victim(&victim_frame_id)) {
+    // Evict victim page.
+    Page *page = pages_ + victim_frame_id;
+    page_table_.erase(page->page_id_);
+    page_table_[page_id] = victim_frame_id;
+    replacer_->Pin(victim_frame_id);
+    if (page->IsDirty()) {
+      disk_manager_->WritePage(page->page_id_, page->data_);
+    }
+
+    // Load new page into buffer pool.
+    disk_manager_->ReadPage(page_id, page->data_);
+    page->page_id_ = page_id;
+    page->pin_count_ = 1;
+    page->is_dirty_ = false;
+    return page;
+  }
+
+  // case4: no unpinned page to evict, nothing to fetch
+  return nullptr;
 }
 
+/*
+  A page in the buffer pool needs to be pinned when it's read, so that other
+  threads won't write to it; it shouldn't be victim page to be replaced, so it
+  won't appear in the replacer. Also, it will be unpinned after reading, and
+  add to the replacer.
+*/
 bool BufferPoolManager::UnpinPageImpl(page_id_t page_id, bool is_dirty) {
   unique_lock<mutex> lck(latch_);
   auto it = page_table_.find(page_id);
-  assert(it != page_table_.end());
-  auto frame_idx = it->second;
+  if (it == page_table_.end()) {
+    return false;  // the unpinned page is not in the buffer pool
+  }
+  frame_id_t frame_idx = it->second;
   Page *page = pages_ + frame_idx;
-  if (page->pin_count_ <= 0) {
-    return false;
+  if (is_dirty) {
+    disk_manager_->WritePage(page->GetPageId(), page->GetData());
+  }
+  if (page->GetPinCount() == 0) {
+    return true;  // the unpinned page is not pinned
   }
   if (--page->pin_count_ == 0) {
     replacer_->Unpin(frame_idx);
   }
-  page->is_dirty_ |= is_dirty;
   return true;
 }
 
@@ -130,82 +134,107 @@ bool BufferPoolManager::FlushPageImpl(page_id_t page_id) {
   unique_lock<mutex> lck(latch_);
   auto it = page_table_.find(page_id);
   if (it == page_table_.end()) {
-    return false;
+    return false;  // the target flushed page is not in the buffer pool
   }
-  Page *page = pages_ + it->second;
-  page->WLatch();
-  lck.unlock();
-  if (page->page_id_ != INVALID_PAGE_ID && page->is_dirty_) {
+  frame_id_t frame_idx = it->second;
+  Page *page = pages_ + frame_idx;
+  if (page->IsDirty()) {
+    disk_manager_->WritePage(page_id, page->GetData());
     page->is_dirty_ = false;
-    disk_manager_->WritePage(page->page_id_, page->data_);
   }
-  page->WUnlatch();
   return true;
 }
 
+// Creates a new page in the buffer pool.
+// Note: new buffered page is considered dirty and pinned.
 Page *BufferPoolManager::NewPageImpl(page_id_t *page_id) {
   // 0.   Make sure you call DiskManager::AllocatePage!
   // 1.   If all the pages in the buffer pool are pinned, return nullptr.
   // 2.   Pick a victim page P from either the free list or the replacer. Always pick from the free list first.
   // 3.   Update P's metadata, zero out memory and add P to the page table.
   // 4.   Set the page ID output parameter. Return a pointer to P.
+
   unique_lock<mutex> lck(latch_);
-  if (free_list_.empty() && replacer_->Size() == 0) {
-    *page_id = INVALID_PAGE_ID;
-    return nullptr;
+  *page_id = disk_manager_->AllocatePage();
+
+  // Allocate the page from the free list.
+  if (!free_list_.empty()) {
+    frame_id_t frame_idx = free_list_.front();
+    free_list_.pop_front();
+    page_table_[*page_id] = frame_idx;
+    Page *page = pages_ + frame_idx;
+    page->ResetMemory();
+    page->page_id_ = *page_id;
+    page->is_dirty_ = true;
+    page->pin_count_ = 1;
+    return page;
   }
-  page_id_t id = disk_manager_->AllocatePage();
-  *page_id = id;
-  return ReplaceAndUpdate(id, true, &lck);
+
+  // Victimize a page via replacer.
+  frame_id_t victim_idx = INVALID_PAGE_ID;
+  if (replacer_->Victim(&victim_idx)) {
+    Page *page = pages_ + victim_idx;
+    page_id_t victim_page_id = page->GetPageId();
+    if (page->IsDirty()) {
+      disk_manager_->WritePage(page->GetPageId(), page->GetData());
+    }
+    page->ResetMemory();
+    page_table_.erase(victim_page_id);
+    page_table_[*page_id] = victim_idx;
+    page->page_id_ = *page_id;
+    page->is_dirty_ = true;
+    page->pin_count_ = 1;
+    return page;
+  }
+
+  // No pages in the free list, and all pages inside buffer pool are pinned.
+  return nullptr;
 }
 
+// Delete a page from buffer pool.
 bool BufferPoolManager::DeletePageImpl(page_id_t page_id) {
   // 0.   Make sure you call DiskManager::DeallocatePage!
   // 1.   Search the page table for the requested page (P).
   // 1.   If P does not exist, return true.
   // 2.   If P exists, but has a non-zero pin-count, return false. Someone is using the page.
   // 3.   Otherwise, P can be deleted. Remove P from the page table, reset its metadata and return it to the free list.
+
   unique_lock<mutex> lck(latch_);
+  disk_manager_->DeallocatePage(page_id);
   auto it = page_table_.find(page_id);
 
-  // 1.   If P does not exist, return true.
+  // The page is not in the buffer pool.
   if (it == page_table_.end()) {
-    lck.unlock();
-    disk_manager_->DeallocatePage(page_id);
     return true;
   }
-  auto frame_idx = it->second;
-  Page *page = pages_ + frame_idx;
-  page->WLatch();
 
-  // 2.   If P exists, but has a non-zero pin-count, return false. Someone is using the page.
-  if (page->pin_count_ > 0) {
-    page->WUnlatch();
+  // The page is currently be used by others, cannot delete from buffer pool.
+  frame_id_t frame_idx = it->second;
+  Page *page = pages_ + frame_idx;
+  if (page->GetPinCount() > 0) {
     return false;
   }
 
-  // 3.   Otherwise, P can be deleted. Remove P from the page table, reset its metadata and return it to the free list.
-  replacer_->Pin(frame_idx);
+  assert(page->pin_count_ == 0);
+  if (page->IsDirty()) {
+    disk_manager_->WritePage(page->GetPageId(), page->GetData());
+  }
   page_table_.erase(page_id);
-  free_list_.emplace_back(frame_idx);
-  lck.unlock();
-
-  // Reset metadata and return to free list.
-  disk_manager_->DeallocatePage(page_id);
-  page->ResetMemory();
-  page->page_id_ = INVALID_PAGE_ID;
+  page->page_id_ = page_id;
+  page->pin_count_ = 0;
   page->is_dirty_ = false;
-  page->WUnlatch();
-  return false;
+  page->ResetMemory();
+  free_list_.push_back(frame_idx);
+  return true;
 }
 
+// Note: cannot call FlushPageImpl() since mutex is not re-entrant.
 void BufferPoolManager::FlushAllPagesImpl() {
   unique_lock<mutex> lck(latch_);
   for (size_t ii = 0; ii < pool_size_; ++ii) {
     Page *page = pages_ + ii;
-    if (page->page_id_ != INVALID_PAGE_ID && page->is_dirty_) {
-      disk_manager_->WritePage(page->page_id_, page->data_);
-      page->is_dirty_ = false;
+    if (page->IsDirty()) {
+      disk_manager_->WritePage(page->GetPageId(), page->GetData());
     }
   }
 }
