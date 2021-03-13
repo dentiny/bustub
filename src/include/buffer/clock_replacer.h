@@ -12,8 +12,8 @@
 
 #pragma once
 
-#include <list>
 #include <mutex>  // NOLINT
+#include <utility>
 #include <vector>
 
 #include "buffer/replacer.h"
@@ -23,6 +23,7 @@ namespace bustub {
 
 /**
  * ClockReplacer implements the clock replacement policy, which approximates the Least Recently Used policy.
+ * ClockReplacer doesn't directly manages buffer frame; it only takes charge of replacement policy.
  */
 class ClockReplacer : public Replacer {
  public:
@@ -39,14 +40,22 @@ class ClockReplacer : public Replacer {
 
   bool Victim(frame_id_t *frame_id) override;
 
+  // Called after a page is pinned to a frame in BufferPoolManager; remove the
+  // frame containing the pinned page from ClockReplacer.
   void Pin(frame_id_t frame_id) override;
 
+  // Called when the pin_count of a page becomes 0; add the frame containing
+  // the unpinned page to the ClockReplacer.
   void Unpin(frame_id_t frame_id) override;
 
   size_t Size() override;
 
  private:
-  // TODO(student): implement me!
+  size_t size_;  // actual size of buffer frames
+  const size_t capacity_;
+  size_t hand_;
+  std::mutex mtx_;
+  std::vector<std::pair<bool, bool>> refs_;  // <if exists, if referenced>
 };
 
 }  // namespace bustub
