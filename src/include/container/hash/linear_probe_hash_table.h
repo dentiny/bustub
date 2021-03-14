@@ -14,6 +14,7 @@
 
 #include <queue>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "buffer/buffer_pool_manager.h"
@@ -87,6 +88,14 @@ class LinearProbeHashTable : public HashTable<KeyType, ValueType, KeyComparator>
   size_t GetSize();
 
  private:
+  std::pair<size_t, slot_offset_t> GetBucketPosition(const uint64_t hash_value) const {
+    size_t page_idx = hash_value / BLOCK_ARRAY_SIZE;  // BLOCK_ARRAY_SIZE is bucket_num_per_page_.
+    slot_offset_t slot_idx = hash_value % BLOCK_ARRAY_SIZE;
+    return {page_idx, slot_idx};
+  }
+  // std::pair<size_t, slot_offset_t> GetBucketPosition(const uint64_t hash_value) const;
+
+ private:
   // member variable
   page_id_t header_page_id_;
   BufferPoolManager *buffer_pool_manager_;
@@ -99,6 +108,8 @@ class LinearProbeHashTable : public HashTable<KeyType, ValueType, KeyComparator>
   HashFunction<KeyType> hash_fn_;
 
   // Keep book of how entries are stored.
+  static constexpr size_t bucket_num_per_page_ = BLOCK_ARRAY_SIZE;
+  size_t bucket_num_;  // number of buckets
   size_t bucket_page_num_;  // number of pages to store buckets
   size_t last_page_bucket_num_;  // bucket number for the last bucket page
   std::vector<page_id_t> bucket_page_ids_;  // map page id(index) to real page id

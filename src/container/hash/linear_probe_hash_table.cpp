@@ -37,10 +37,11 @@ HASH_TABLE_TYPE::LinearProbeHashTable(const std::string &name, BufferPoolManager
     : buffer_pool_manager_(buffer_pool_manager),
       comparator_(comparator),
       hash_fn_(std::move(hash_fn)),
+      bucket_num_(num_buckets),
       // Calculate the number of pages needed for num_buckets entries.
       // Note: BLOCK_ARRAY_SIZE represents how many entries could be stored at a page.
-      bucket_page_num_((num_buckets - 1) / BLOCK_ARRAY_SIZE + 1),
-      last_page_bucket_num_(num_buckets - BLOCK_ARRAY_SIZE * (bucket_page_num_ - 1)) {
+      bucket_page_num_((num_buckets - 1) / bucket_num_per_page_ + 1),
+      last_page_bucket_num_(num_buckets - bucket_num_per_page_ * (bucket_page_num_ - 1)) {
       // Allocate head_page, which is stored and fetched on header_page_id_;
       // ht_header_page(metadata of hash table) is the data of head_page.
       Page *head_page = buffer_pool_manager_->NewPage(&header_page_id_);
@@ -77,9 +78,57 @@ HASH_TABLE_TYPE::LinearProbeHashTable(const std::string &name, BufferPoolManager
 /*****************************************************************************
  * SEARCH
  *****************************************************************************/
+
+// std::pair<size_t, slot_offset_t> HASH_TABLE_TYPE::GetBucketPosition(const uint64_t hash_value) const {
+//   size_t page_idx = hash_value / BLOCK_ARRAY_SIZE;
+//   slot_offset_t slot_idx = hash_value % BLOCK_ARRAY_SIZE;
+//   return {page_idx, slot_idx};
+// }
+
 template <typename KeyType, typename ValueType, typename KeyComparator>
 bool HASH_TABLE_TYPE::GetValue(Transaction *transaction, const KeyType &key, std::vector<ValueType> *result) {
-  return false;
+  // Locate page and slot offset of the key.
+  const uint64_t hash_value = hash_fn_.GetHash(key);
+  table_latch_.RLock();
+  auto [start_page_idx, start_slot_idx] = GetBucketPosition(hash_value);
+  size_t cur_page_idx = start_page_idx;
+  slot_offset_t cur_slot_idx = start_slot_idx;
+
+  // Fetch bucket page via buffer pool manager.
+  Page *bucket_page = buffer_pool_manager_->FetchPage(bucket_page_ids_[cur_page_idx]);
+  bucket_page->RLatch();
+  auto ht_block_page = reinterpret_cast<HashTableBlockPage<KeyType, ValueType, KeyComparator>*>(bucket_page->GetData());
+
+  // Iterate through until unoccupied.
+  while (ht_block_page->IsOccupied(cur_slot_idx)) {
+    if (ht_block_page->IsReadable(cur_slot_idx) && comparator_(key, ht_block_page->KeyAt(cur_slot_idx)) == 0) {
+      result->emplace_back(ht_block_page->ValueAt(cur_slot_idx));
+    }
+
+    // Current ht_block_page has been read over, fetch next one.
+    if (++cur_slot_idx == ((cur_page_idx == (bucket_page_num_ - 1)) ? last_page_bucket_num_ : bucket_num_per_page_)) {
+      // Release currently holding bucket_page.
+      // Note: when fetching, FetchPage() involves pinning the page; while release, have to manually unpin.
+      bucket_page->RUnlatch();
+      buffer_pool_manager_->UnpinPage(bucket_page_ids_[cur_page_idx], false /* is_dirty */);
+
+      cur_page_idx = (cur_page_idx + 1) % bucket_page_num_;
+      cur_slot_idx = 0;
+
+      bucket_page = buffer_pool_manager_->FetchPage(bucket_page_ids_[cur_page_idx]);
+      bucket_page->RLatch();
+      ht_block_page = reinterpret_cast<HashTableBlockPage<KeyType, ValueType, KeyComparator>*>(bucket_page->GetData());
+    }
+
+    // Check if goes back to where it starts.
+    if (cur_page_idx == start_page_idx && cur_slot_idx == start_slot_idx) {
+      break;
+    }
+  }
+  bucket_page->RUnlatch();
+  buffer_pool_manager_->UnpinPage(bucket_page_ids_[cur_page_idx], false /* is_dirty */);
+  table_latch_.RLock();
+  return !result->empty();
 }
 /*****************************************************************************
  * INSERTION
