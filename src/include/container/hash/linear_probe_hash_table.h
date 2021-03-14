@@ -97,6 +97,11 @@ class LinearProbeHashTable : public HashTable<KeyType, ValueType, KeyComparator>
 
   // Hash function
   HashFunction<KeyType> hash_fn_;
+
+  // Keep book of how entries are stored.
+  size_t bucket_page_num_;  // number of pages to store buckets
+  size_t last_page_bucket_num_;  // bucket number for the last bucket page
+  std::vector<page_id_t> bucket_page_ids_;  // map page id(index) to real page id
 };
 
 }  // namespace bustub

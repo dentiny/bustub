@@ -12,6 +12,8 @@
 
 #include "storage/page/hash_table_header_page.h"
 
+#include <cassert>
+
 namespace bustub {
 page_id_t HashTableHeaderPage::GetBlockPageId(size_t index) { return block_page_ids_[index]; }
 
@@ -23,7 +25,10 @@ lsn_t HashTableHeaderPage::GetLSN() const { return lsn_; }
 
 void HashTableHeaderPage::SetLSN(lsn_t lsn) { lsn_ = lsn; }
 
-void HashTableHeaderPage::AddBlockPageId(page_id_t page_id) { block_page_ids_[next_ind_++] = page_id; }
+void HashTableHeaderPage::AddBlockPageId(page_id_t page_id) {
+  block_page_ids_[next_ind_++] = page_id;
+  assert(next_ind_ < size_);
+}
 
 size_t HashTableHeaderPage::NumBlocks() { return next_ind_; }
 
