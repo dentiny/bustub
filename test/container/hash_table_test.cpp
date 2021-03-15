@@ -13,6 +13,8 @@
 #include <thread>  // NOLINT
 #include <vector>
 
+#include <iostream>
+
 #include "common/logger.h"
 #include "container/hash/linear_probe_hash_table.h"
 #include "gtest/gtest.h"
