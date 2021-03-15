@@ -77,14 +77,35 @@ class Catalog {
    */
   TableMetadata *CreateTable(Transaction *txn, const std::string &table_name, const Schema &schema) {
     BUSTUB_ASSERT(names_.count(table_name) == 0, "Table names should be unique!");
-    return nullptr;
+    table_oid_t cur_table_oid = next_index_oid_++;
+    names_.emplace(table_name, cur_table_oid);
+    // emplace return type: pair<iterator, bool>
+    const auto& it = tables_.emplace(cur_table_oid, std::make_unique<TableMetadata>(
+      schema, table_name, std::make_unique<TableHeap>(bpm_, lock_manager_, log_manager_, txn), cur_table_oid));
+    return it.first->second.get();
   }
 
   /** @return table metadata by name */
-  TableMetadata *GetTable(const std::string &table_name) { return nullptr; }
+  TableMetadata *GetTable(const std::string &table_name) {
+    const auto& names_it = names_.find(table_name);
+    if (names_it == names_.end()) {
+      throw std::out_of_range{table_name + " not found!"};
+    }
+    const auto& tables_it = tables_.find(names_it->second);
+    if (tables_it == tables_.end()) {
+      throw std::out_of_range{"DB error: " + table_name + " not in found!"};
+    }
+    return tables_it->second.get();
+  }
 
   /** @return table metadata by oid */
-  TableMetadata *GetTable(table_oid_t table_oid) { return nullptr; }
+  TableMetadata *GetTable(table_oid_t table_oid) {
+    const auto& tables_it = tables_.find(table_oid);
+    if (tables_it == tables_.end()) {
+      throw std::out_of_range{"table Id of " + std::to_string(table_oid) + " not found!"};
+    }
+    return tables_it->second.get();
+  }
 
   /**
    * Create a new index, populate existing data of the table and return its metadata.
