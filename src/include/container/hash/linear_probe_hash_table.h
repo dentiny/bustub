@@ -88,6 +88,12 @@ class LinearProbeHashTable : public HashTable<KeyType, ValueType, KeyComparator>
   size_t GetSize();
 
  private:
+  using HashTableBlockPageType = HashTableBlockPage<KeyType, ValueType, KeyComparator>;
+
+ private:
+  // Interface for Insert() and Resize().
+  bool InsertImpl(const KeyType &key, const ValueType &value);
+
   std::pair<size_t, slot_offset_t> GetBucketPosition(const uint64_t hash_value) const {
     size_t page_idx = hash_value / BLOCK_ARRAY_SIZE;  // BLOCK_ARRAY_SIZE is bucket_num_per_page_.
     slot_offset_t slot_idx = hash_value % BLOCK_ARRAY_SIZE;
