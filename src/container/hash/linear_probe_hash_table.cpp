@@ -122,7 +122,7 @@ bool HASH_TABLE_TYPE::GetValue(Transaction *transaction, const KeyType &key, std
   }
   bucket_page->RUnlatch();
   buffer_pool_manager_->UnpinPage(bucket_page_ids_[cur_page_idx], false /* is_dirty */);
-  table_latch_.RLock();
+  table_latch_.RUnlock();
   return !result->empty();
 }
 /*****************************************************************************
@@ -176,7 +176,7 @@ bool HASH_TABLE_TYPE::InsertImpl(const KeyType &key, const ValueType &value) {
 
   bucket_page->WUnlatch();
   buffer_pool_manager_->UnpinPage(bucket_page_ids_[cur_page_idx], insert_succeeds /* is_dirty */);
-  return true;
+  return insert_succeeds;
 }
 
 template <typename KeyType, typename ValueType, typename KeyComparator>
@@ -236,7 +236,7 @@ bool HASH_TABLE_TYPE::Remove(Transaction *transaction, const KeyType &key, const
   bucket_page->WUnlatch();
   buffer_pool_manager_->UnpinPage(bucket_page_ids_[cur_page_idx], remove_succeeds /* is_dirty */);
   table_latch_.WUnlock();
-  return true;
+  return remove_succeeds;
 }
 
 /*****************************************************************************
@@ -293,6 +293,7 @@ void HASH_TABLE_TYPE::Resize(size_t initial_size) {
   for (size_t ii = old_bucket_page_num; ii < bucket_page_num_; ++ii) {
     ht_header_page->AddBlockPageId(bucket_page_ids_[ii]);
   }
+  ht_header_page->SetSize(bucket_num_);
   head_page->WUnlatch();
   buffer_pool_manager_->UnpinPage(header_page_id_, true /* is_dirty */);
 
