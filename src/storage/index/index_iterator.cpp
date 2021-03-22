@@ -16,7 +16,11 @@ INDEXITERATOR_TYPE::IndexIterator(B_PLUS_TREE_LEAF_PAGE_TYPE *leaf, int idx, Buf
   idx_(idx), leaf_(leaf), buffer_pool_manager_(buffer_pool_manager) {}
 
 INDEX_TEMPLATE_ARGUMENTS
-INDEXITERATOR_TYPE::~IndexIterator() = default;
+INDEXITERATOR_TYPE::~IndexIterator() {
+  if (leaf_ != nullptr) {
+    buffer_pool_manager_->UnpinPage(leaf_->GetPageId(), false /* is_dirty */);
+  }
+}
 
 INDEX_TEMPLATE_ARGUMENTS
 bool INDEXITERATOR_TYPE::isEnd() { return leaf_ == nullptr; }
@@ -30,7 +34,9 @@ INDEXITERATOR_TYPE &INDEXITERATOR_TYPE::operator++() {
   if (idx_ >= leaf_->GetSize()) {
     page_id_t next_leaf_page_id = leaf_->GetNextPageId();
     if (next_leaf_page_id == INVALID_PAGE_ID) {
+      // The B+ tree has finished iteration, set leaf and index to default invalid value, same as end() at b_plus_tree.cpp.
       leaf_ = nullptr;
+      idx_ = 0;
     } else {
       buffer_pool_manager_->UnpinPage(leaf_->GetPageId(), false /* is_dirty */);
       Page *next_page = buffer_pool_manager_->FetchPage(next_leaf_page_id);

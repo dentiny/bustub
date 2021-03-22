@@ -33,6 +33,7 @@ void B_PLUS_TREE_LEAF_PAGE_TYPE::Init(page_id_t page_id, page_id_t parent_id, in
   SetPageId(page_id);
   SetParentPageId(parent_id);
   SetMaxSize(max_size);
+  SetNextPageId(INVALID_PAGE_ID);
 }
 
 /**
@@ -121,6 +122,7 @@ int B_PLUS_TREE_LEAF_PAGE_TYPE::Insert(const KeyType &key, const ValueType &valu
 INDEX_TEMPLATE_ARGUMENTS
 void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveHalfTo(BPlusTreeLeafPage *recipient, BufferPoolManager *buffer_pool_manager) {
   assert(recipient != nullptr);
+  assert(GetSize() > GetMaxSize());
   size_t cur_size = GetSize();
   size_t move_from_index = cur_size / 2;
   for (size_t ii = move_from_index; ii < cur_size; ++ii) {  // move the last half
@@ -130,8 +132,8 @@ void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveHalfTo(BPlusTreeLeafPage *recipient, Buffer
   // Update current leaf page and recipient page's metadata.
   recipient->SetNextPageId(GetNextPageId());
   SetNextPageId(recipient->GetPageId());
-  recipient->SetSize(cur_size - move_from_index);
   SetSize(move_from_index);
+  recipient->SetSize(cur_size - move_from_index);
 }
 
 /*

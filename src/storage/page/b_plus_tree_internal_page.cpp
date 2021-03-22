@@ -39,7 +39,6 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::Init(page_id_t page_id, page_id_t parent_id
  */
 INDEX_TEMPLATE_ARGUMENTS
 KeyType B_PLUS_TREE_INTERNAL_PAGE_TYPE::KeyAt(int index) const {
-  // replace with your own code
   assert(index >= 0 && index < GetSize());
   return array[index].first;
 }
@@ -87,18 +86,16 @@ INDEX_TEMPLATE_ARGUMENTS
 ValueType B_PLUS_TREE_INTERNAL_PAGE_TYPE::Lookup(const KeyType &key, const KeyComparator &comparator) const {
   int idx1 = 1;  // the first key should always be invalid
   int idx2 = GetSize() - 1;
-  while (idx1 < idx2) {
+  while (idx1 <= idx2) {
     int mid = idx1 + (idx2 - idx1) / 2;
     const KeyType& cur_key = array[mid].first;
-    if (comparator(cur_key, key) == 0) {
-      return array[mid].second;
-    } else if (comparator(cur_key, key) < 0) {
+    if (comparator(cur_key, key) <= 0) {
       idx1 = mid + 1;
     } else {
       idx2 = mid - 1;
     }
   }
-  return INVALID_PAGE_ID;
+  return array[idx1 - 1].second;
 }
 
 /*****************************************************************************
@@ -148,6 +145,7 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::MoveHalfTo(BPlusTreeInternalPage *recipient
                                                 BufferPoolManager *buffer_pool_manager) {
   assert(recipient != nullptr);
   assert(buffer_pool_manager != nullptr);
+  assert(GetSize() > GetMaxSize());
   page_id_t recipient_page_id = recipient->GetPageId();
   size_t cur_size = GetSize();
   size_t move_start_index = cur_size / 2;
