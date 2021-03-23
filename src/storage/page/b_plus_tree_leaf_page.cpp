@@ -13,6 +13,7 @@
 
 #include "common/exception.h"
 #include "common/rid.h"
+#include "storage/page/b_plus_tree_internal_page.h"
 #include "storage/page/b_plus_tree_leaf_page.h"
 
 namespace bustub {
@@ -170,7 +171,20 @@ bool B_PLUS_TREE_LEAF_PAGE_TYPE::Lookup(const KeyType &key, ValueType *value, co
  * @return   page size after deletion
  */
 INDEX_TEMPLATE_ARGUMENTS
-int B_PLUS_TREE_LEAF_PAGE_TYPE::RemoveAndDeleteRecord(const KeyType &key, const KeyComparator &comparator) { return 0; }
+int B_PLUS_TREE_LEAF_PAGE_TYPE::RemoveAndDeleteRecord(const KeyType &key, const KeyComparator &comparator) {
+  // Record to delete doesn't exist in the leaf page.
+  int idx_to_delete = KeyIndex(key, comparator);
+  int old_size = GetSize();
+  if (idx_to_delete >= old_size || comparator(KeyAt(idx_to_delete), key) != 0) {
+    return old_size;
+  }
+
+  for (int ii = idx_to_delete; ii < old_size - 1; ++ii) {
+    array[ii] = array[ii + 1];
+  }
+  IncreaseSize(-1);
+  return old_size - 1;
+}
 
 /*****************************************************************************
  * MERGE
@@ -180,7 +194,18 @@ int B_PLUS_TREE_LEAF_PAGE_TYPE::RemoveAndDeleteRecord(const KeyType &key, const 
  * to update the next_page id in the sibling page
  */
 INDEX_TEMPLATE_ARGUMENTS
-void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveAllTo(BPlusTreeLeafPage *recipient) {}
+void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveAllTo(BPlusTreeLeafPage *recipient) {
+  assert(recipient != nullptr);
+  int old_size = GetSize();
+  int recipient_size = recipient->GetSize();
+  for (int ii = 0; ii < old_size; ++ii) {
+    recipient->array[recipient_size + ii] = array[ii];
+  }
+  SetSize(0);
+  recipient->IncreaseSize(old_size);
+  recipient->SetNextPageId(GetNextPageId());
+  // TODO: previous's next page id = recipient's page id
+}
 
 /*****************************************************************************
  * REDISTRIBUTE
@@ -189,25 +214,87 @@ void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveAllTo(BPlusTreeLeafPage *recipient) {}
  * Remove the first key & value pair from this page to "recipient" page.
  */
 INDEX_TEMPLATE_ARGUMENTS
-void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveFirstToEndOf(BPlusTreeLeafPage *recipient) {}
+void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveFirstToEndOf(BPlusTreeLeafPage *recipient,
+                                                  BufferPoolManager *buffer_pool_manager) {
+  // Current leaf page should at least have 2 items: 1 to move, 1 to update parent.
+  int old_size = GetSize();
+  assert(old_size >= 2);
+  assert(recipient != nullptr);
+  assert(buffer_pool_manager != nullptr);
+
+  // Get and remove the first item of self array, to the end of recipient.
+  const MappingType& kv = GetItem(0 /* index */);
+  for (int ii = 0; ii < old_size - 1; ++ii) {
+    array[ii] = array[ii + 1];
+  }
+  IncreaseSize(-1);
+  recipient->CopyLastFrom(kv);
+
+  // Update parent's key range distribution(always KeyAt(0)).
+  page_id_t page_id = GetPageId();
+  page_id_t parent_page_id = GetParentPageId();
+  Page *page = buffer_pool_manager->FetchPage(parent_page_id);
+  assert(page != nullptr);
+  B_PLUS_TREE_INTERNAL_PAGE *parent_page = reinterpret_cast<B_PLUS_TREE_INTERNAL_PAGE*>(page->GetData());
+  int value_idx = parent_page->ValueIndex(page_id);  // index of self leaf page's first key in parent page
+  parent_page->SetKeyAt(value_idx /* index */, KeyAt(0 /* index */));
+  buffer_pool_manager->UnpinPage(parent_page_id, true /* is_dirty */);
+}
 
 /*
  * Copy the item into the end of my item list. (Append item to my array)
+ * Invoked by MoveFirstToEndOf, recipient add item to the end of the array.
  */
 INDEX_TEMPLATE_ARGUMENTS
-void B_PLUS_TREE_LEAF_PAGE_TYPE::CopyLastFrom(const MappingType &item) {}
+void B_PLUS_TREE_LEAF_PAGE_TYPE::CopyLastFrom(const MappingType &item) {
+  assert(GetSize() + 1 <= GetMaxSize());
+  array[GetSize()] = item;
+  IncreaseSize(1);
+}
 
 /*
  * Remove the last key & value pair from this page to "recipient" page.
  */
 INDEX_TEMPLATE_ARGUMENTS
-void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveLastToFrontOf(BPlusTreeLeafPage *recipient) {}
+void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveLastToFrontOf(BPlusTreeLeafPage *recipient,
+                                                    BufferPoolManager *buffer_pool_manager) {
+  // Current leaf page should at least have 2 items: 1 to move, 1 to update parent.
+  int old_size = GetSize();
+  assert(old_size >= 2);
+  assert(recipient != nullptr);
+  assert(buffer_pool_manager != nullptr);
+
+  // Get the move the last item to the front of recipient.
+  const MappingType& kv = GetItem(old_size - 1 /* index */);
+  IncreaseSize(-1);
+  recipient->CopyFirstFrom(kv, buffer_pool_manager);
+}
 
 /*
  * Insert item at the front of my items. Move items accordingly.
+ * Invoked by MoveLastToFrontOf, recipient add item to the front of the array; update parent's key.
  */
 INDEX_TEMPLATE_ARGUMENTS
-void B_PLUS_TREE_LEAF_PAGE_TYPE::CopyFirstFrom(const MappingType &item) {}
+void B_PLUS_TREE_LEAF_PAGE_TYPE::CopyFirstFrom(const MappingType &item, BufferPoolManager *buffer_pool_manager) {
+  // Copy item to the front of array.
+  int old_size = GetSize();
+  assert(old_size + 1 <= GetMaxSize());
+  for (int ii = 0; ii < old_size; ++ii) {
+    array[ii + 1] = array[ii];
+  }
+  array[0] = item;
+  IncreaseSize(1);
+
+  // Update parent's key range distribution(always KeyAt(0)).
+  page_id_t page_id = GetPageId();
+  page_id_t parent_page_id = GetParentPageId();
+  Page *page = buffer_pool_manager->FetchPage(parent_page_id);
+  assert(page != nullptr);
+  B_PLUS_TREE_INTERNAL_PAGE *parent_page = reinterpret_cast<B_PLUS_TREE_INTERNAL_PAGE*>(page->GetData());
+  int value_idx = parent_page->ValueIndex(page_id);
+  parent_page->SetKeyAt(value_idx /* index */, KeyAt(0 /* index */));
+  buffer_pool_manager->UnpinPage(parent_page_id, true /* is_dirty */);
+}
 
 template class BPlusTreeLeafPage<GenericKey<4>, RID, GenericComparator<4>>;
 template class BPlusTreeLeafPage<GenericKey<8>, RID, GenericComparator<8>>;

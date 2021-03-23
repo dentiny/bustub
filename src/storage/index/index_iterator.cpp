@@ -33,8 +33,8 @@ INDEXITERATOR_TYPE &INDEXITERATOR_TYPE::operator++() {
   ++idx_;
   if (idx_ >= leaf_->GetSize()) {
     page_id_t next_leaf_page_id = leaf_->GetNextPageId();
+    // The B+ tree finishes iteration, set leaf and index to default value, which is same as end() at b_plus_tree.cpp.
     if (next_leaf_page_id == INVALID_PAGE_ID) {
-      // The B+ tree has finished iteration, set leaf and index to default invalid value, same as end() at b_plus_tree.cpp.
       leaf_ = nullptr;
       idx_ = 0;
     } else {
