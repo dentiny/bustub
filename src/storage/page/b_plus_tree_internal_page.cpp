@@ -223,10 +223,45 @@ ValueType B_PLUS_TREE_INTERNAL_PAGE_TYPE::RemoveAndReturnOnlyChild() {
  * to make sure the middle key is added to the recipient to maintain the invariant.
  * You also need to use BufferPoolManager to persist changes to the parent page id for those
  * pages that are moved to the recipient
+ * Note: current internal page is the next page of recipient page.
  */
 INDEX_TEMPLATE_ARGUMENTS
-void B_PLUS_TREE_INTERNAL_PAGE_TYPE::MoveAllTo(BPlusTreeInternalPage *recipient, const KeyType &middle_key,
-                                               BufferPoolManager *buffer_pool_manager) {}
+void B_PLUS_TREE_INTERNAL_PAGE_TYPE::MoveAllTo(BPlusTreeInternalPage *recipient, int index_in_parent,
+                                               BufferPoolManager *buffer_pool_manager) {
+  assert(recipient != nullptr);
+  assert(buffer_pool_manager != nullptr);
+
+  // Update parent's metadata.
+  page_id_t parent_page_id = recipient->GetParentPageId();
+  Page *page = buffer_pool_manager->FetchPage(parent_page_id);
+  assert(page != nullptr);
+  B_PLUS_TREE_INTERNAL_PAGE_TYPE *parent_page = reinterpret_cast<B_PLUS_TREE_INTERNAL_PAGE_TYPE*>(page->GetData());
+  SetKeyAt(0, parent_page->KeyAt(index_in_parent));  // seperation key from parent
+  buffer_pool_manager->UnpinPage(parent_page_id, true /* is_dirty */);
+
+  // Move items to recipient, and update child pages' parent.
+  int old_size = GetSize();
+  int recipient_size = recipient->GetSize();
+  page_id_t recipient_page_id = recipient->GetPageId();
+  for (int ii = 0; ii < old_size; ++ii) {
+    recipient->array[recipient_size + ii] = array[ii];
+
+    // Update child page's parent.
+    page_id_t child_page_id = array[ii].second;
+    page = buffer_pool_manager->FetchPage(child_page_id);
+    assert(page != nullptr);
+    BPlusTreePage *child_page = reinterpret_cast<BPlusTreePage*>(page->GetData());
+    child_page->SetParentPageId(recipient_page_id);
+    buffer_pool_manager->UnpinPage(child_page_id, true /* true */);
+  }
+  SetSize(0);
+  recipient->IncreaseSize(old_size);
+  assert(recipient->GetSize() <= recipient->GetMaxSize());
+
+  // TODO: release pages
+  buffer_pool_manager->UnpinPage(GetPageId(), true /* is_dirty */);
+  buffer_pool_manager->UnpinPage(recipient_page_id, true /* is_dirty */);
+}
 
 /*****************************************************************************
  * REDISTRIBUTE

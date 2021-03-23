@@ -43,7 +43,7 @@ void BPlusTreePage::SetMaxSize(int size) { max_size_ = size; }
  * if internal page, at least two entries.
  */
 int BPlusTreePage::GetMinSize() const {
-  return !IsRootPage() ? (max_size_ / 2) : IsLeafPage() ? 1 : 2;
+  return !IsRootPage() ? ((max_size_ + 1) / 2) : IsLeafPage() ? 1 : 2;
 }
 
 /*

@@ -192,10 +192,14 @@ int B_PLUS_TREE_LEAF_PAGE_TYPE::RemoveAndDeleteRecord(const KeyType &key, const 
 /*
  * Remove all of key & value pairs from this page to "recipient" page. Don't forget
  * to update the next_page id in the sibling page
+ * Note: current leaf page is the next page of recipient
  */
 INDEX_TEMPLATE_ARGUMENTS
-void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveAllTo(BPlusTreeLeafPage *recipient) {
+void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveAllTo(BPlusTreeLeafPage *recipient, int index_in_parent,
+                                            BufferPoolManager *buffer_pool_manager) {
   assert(recipient != nullptr);
+  assert(buffer_pool_manager != nullptr);
+
   int old_size = GetSize();
   int recipient_size = recipient->GetSize();
   for (int ii = 0; ii < old_size; ++ii) {
@@ -204,7 +208,11 @@ void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveAllTo(BPlusTreeLeafPage *recipient) {
   SetSize(0);
   recipient->IncreaseSize(old_size);
   recipient->SetNextPageId(GetNextPageId());
-  // TODO: previous's next page id = recipient's page id
+  assert(recipient->GetSize() <= recipient->GetMaxSize());
+
+  // TODO: release page
+  buffer_pool_manager->UnpinPage(GetPageId(), true /* is_dirty */);
+  buffer_pool_manager->UnpinPage(recipient->GetPageId(), true /* is_dirty */);
 }
 
 /*****************************************************************************

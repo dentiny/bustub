@@ -201,7 +201,17 @@ void BPLUSTREE_TYPE::InsertIntoParent(BPlusTreePage *old_node, const KeyType &ke
  * necessary.
  */
 INDEX_TEMPLATE_ARGUMENTS
-void BPLUSTREE_TYPE::Remove(const KeyType &key, Transaction *transaction) {}
+void BPLUSTREE_TYPE::Remove(const KeyType &key, Transaction *transaction) {
+  if (IsEmpty()) {
+    return;
+  }
+  LeafPage *leaf = reinterpret_cast<LeafPage*>(FindLeafPage(key, false /* leftmost */));
+  int cur_size = leaf->RemoveAndDeleteRecord(key, comparator_);
+  if (cur_size < leaf->GetMinSize()) {
+    CoalesceOrRedistribute(leaf, transaction);
+  }
+  buffer_pool_manager_->UnpinPage(leaf->GetPageId(), true /* is_dirty */);
+}
 
 /*
  * User needs to first find the sibling of input page. If sibling's size + input
@@ -259,7 +269,45 @@ void BPLUSTREE_TYPE::Redistribute(N *neighbor_node, N *node, int index) {}
  * happend
  */
 INDEX_TEMPLATE_ARGUMENTS
-bool BPLUSTREE_TYPE::AdjustRoot(BPlusTreePage *old_root_node) { return false; }
+bool BPLUSTREE_TYPE::AdjustRoot(BPlusTreePage *old_root_node) {
+  assert(old_root_node != nullptr);
+
+  // case 1: when you delete the last element in root page, but root page still has one last child
+  // Note: root page is an internal page
+  if (old_root_node->GetSize() == 1) {
+    // Set the only child as new root
+    InternalPage *old_root_page = reinterpret_cast<InternalPage*>(old_root_node);
+    page_id_t new_root_page_id = old_root_page->RemoveAndReturnOnlyChild();
+    root_page_id_ = new_root_page_id;
+    UpdateRootPageId(0 /* update */);
+
+    // Update child page's parent page id
+    Page *page = buffer_pool_manager_->FetchPage(root_page_id_);
+    assert(page != nullptr);
+    BPlusTreePage *new_root_page = reinterpret_cast<BPlusTreePage*>(page->GetData());
+    new_root_page->SetParentPageId(INVALID_PAGE_ID);
+    buffer_pool_manager_->UnpinPage(root_page_id_, true /* is_dirty */);
+
+    // Delete current root page
+    buffer_pool_manager_->UnpinPage(old_root_node->GetPageId(), false /* is_dirty */);
+    buffer_pool_manager_->DeletePage(old_root_node->GetPageId());
+  }
+
+  // case 2: when you delete the last element in whole b+ tree
+  // Note: root page is a leaf page
+  if (old_root_node->IsLeafPage()) {
+    assert(old_root_node->GetSize() == 0);
+    assert(old_root_node->GetParentPageId() == INVALID_PAGE_ID);
+    buffer_pool_manager_->UnpinPage(root_page_id_, false /* is_dirty */);
+    buffer_pool_manager_->DeletePage(root_page_id_);
+    root_page_id_ = INVALID_PAGE_ID;
+    UpdateRootPageId(0 /* update */);
+    return true;
+  }
+
+  // Leaf page is allowed to have kv-pairs less than MinSize.
+  return false;
+}
 
 /*****************************************************************************
  * INDEX ITERATOR
