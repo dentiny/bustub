@@ -259,8 +259,8 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::MoveAllTo(BPlusTreeInternalPage *recipient,
   assert(recipient->GetSize() <= recipient->GetMaxSize());
 
   // TODO: release pages
-  buffer_pool_manager->UnpinPage(GetPageId(), true /* is_dirty */);
-  buffer_pool_manager->UnpinPage(recipient_page_id, true /* is_dirty */);
+  // buffer_pool_manager->UnpinPage(GetPageId(), true /* is_dirty */);
+  // buffer_pool_manager->UnpinPage(recipient_page_id, true /* is_dirty */);
 }
 
 /*****************************************************************************
