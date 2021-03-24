@@ -209,10 +209,6 @@ void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveAllTo(BPlusTreeLeafPage *recipient, int ind
   recipient->IncreaseSize(old_size);
   recipient->SetNextPageId(GetNextPageId());
   assert(recipient->GetSize() <= recipient->GetMaxSize());
-
-  // TODO: release page
-  // buffer_pool_manager->UnpinPage(GetPageId(), true /* is_dirty */);
-  // buffer_pool_manager->UnpinPage(recipient->GetPageId(), true /* is_dirty */);
 }
 
 /*****************************************************************************

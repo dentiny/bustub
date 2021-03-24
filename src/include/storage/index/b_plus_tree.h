@@ -110,6 +110,43 @@ class BPlusTree {
   template<typename N>
   bool GetSibling(InternalPage *parent_page, N *node, N **sibling);
 
+  // Apply Basic Latch Crabbing Protocol to fetch new page.
+  BPlusTreePage *CrabbingProtocalFetchPage(page_id_t page_id, page_id_t prev_page_id, Transaction *transaction, OpType op);
+
+  // Unlock and unpin/delete page within transaction.
+  void FreePageWithinTransaction(page_id_t page_id, Transaction *transaction, bool exclusive);
+
+  // Lock utils.
+  inline void Lock(Page *page, bool exclusive) {
+    assert(page != nullptr);
+    if (exclusive) {
+      page->WLatch();
+    } else {
+      page->RLatch();
+    }
+  }
+
+  inline void Lock(page_id_t page_id, bool exclusive) {
+    Page *page = buffer_pool_manager_->FetchPage(page_id);
+    assert(page != nullptr);
+    Lock(page, exclusive);
+  }
+
+  inline void Unlock(Page *page, bool exclusive) {
+    assert(page != nullptr);
+    if (exclusive) {
+      page->WUnlatch();
+    } else {
+      page->RUnlatch();
+    }
+  }
+
+  inline void Unlock(page_id_t page_id, bool exclusive) {
+    Page *page = buffer_pool_manager_->FetchPage(page_id);
+    assert(page != nullptr);
+    Unlock(exclusive, page);
+  }
+
   /* Debug Routines for FREE!! */
   void ToGraph(BPlusTreePage *page, BufferPoolManager *bpm, std::ofstream &out) const;
 

@@ -251,7 +251,7 @@ bool BPLUSTREE_TYPE::CoalesceOrRedistribute(N *node, Transaction *transaction) {
   N *next_node = is_sibling_prev ? node : sibling_page;
   page_id_t prev_page_id = prev_node->GetPageId();
   // page_id_t next_page_id = next_node->GetPageId();
-  
+
   // case2: If sibling's size + input page's size <= page's max size, then merge.
   // Remove all items within next_node into prev_node.
   if (prev_node->GetSize() + next_node->GetSize() <= next_node->GetSize()) {
@@ -480,6 +480,63 @@ Page *BPLUSTREE_TYPE::FindLeafPage(const KeyType &key, bool leftMost) {
     cur_page = reinterpret_cast<BPlusTreePage*>(buffer_pool_manager_->FetchPage(cur_page_id)->GetData());
   }
   return reinterpret_cast<Page*>(cur_page);
+}
+
+/* 
+ * Basic Latch Crabbing Protocol:
+ * Search: Start at root and go down, repeatedly acquire latch on child and then unlatch parent.
+ * Insert/Delete: Start at root and go down, obtaining X latches as needed. Once child is latched, check
+ * if it is safe. If the child is safe, release latches on all its ancestors.
+ * 
+ * (1) Lock current page.
+ * (2) Release all previous latched pages if no chaining exclusive operations.
+ * (3) (For transaction)Add current page into transaction latched page set.
+ */
+INDEX_TEMPLATE_ARGUMENTS
+BPlusTreePage *BPLUSTREE_TYPE::CrabbingProtocalFetchPage(page_id_t page_id, page_id_t prev_page_id, Transaction *transaction, OpType op) {
+  bool exclusive = op != OpType::SEARCH;
+  Page *page = buffer_pool_manager_->FetchPage(page_id);
+  assert(page != nullptr);
+  Lock(page, exclusive);
+  BPlusTreePage *tree_page = reinterpret_cast<BPlusTreePage*>(page->GetData());
+  if (prev_page_id != INVALID_PAGE_ID && (!exclusive || tree_page->IsSafeOp(op))) {
+    // With no chaining exclusive operation, free all previous latched pages.
+    FreePageWithinTransaction(prev_page_id, transaction, exclusive);
+  }
+  if (transaction != nullptr) {
+    transaction->AddIntoPageSet(page);
+  }
+  return tree_page;
+}
+
+/*
+ * Unlock and unpin/delete page within transaction.
+ */
+INDEX_TEMPLATE_ARGUMENTS
+void BPLUSTREE_TYPE::FreePageWithinTransaction(page_id_t page_id, Transaction *transaction, bool exclusive) {
+  // TODO: root page unlock
+
+  // If there's no transaction, unpin current page directly.
+  if (transaction == nullptr) {
+    Unlock(page_id, exclusive);
+    buffer_pool_manager_->UnpinPage(page_id, exclusive);
+    return;
+  }
+
+  // For transaction, release latches on all ancestors.
+  auto pages_under_latch = transaction->GetPageSet();
+  auto pages_to_delete = transaction->GetDeletedPageSet();
+  for (Page *page : *pages_under_latch) {
+    page_id_t cur_page_id = page->GetPageId();
+    Unlock(cur_page_id, exclusive);
+    buffer_pool_manager_->UnpinPage(cur_page_id, exclusive);
+    if (transaction->IsWithinDeletedPageSet(cur_page_id)) {
+      buffer_pool_manager_->DeletePage(cur_page_id);
+      transaction->RemoveFromDeletedPageSet(cur_page_id);
+    }
+  }
+  assert(transaction->GetDeletedPageSet()->empty());
+  transaction->ClearPageSet();
 }
 
 /*

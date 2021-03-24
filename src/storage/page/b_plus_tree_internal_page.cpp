@@ -257,10 +257,6 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::MoveAllTo(BPlusTreeInternalPage *recipient,
   SetSize(0);
   recipient->IncreaseSize(old_size);
   assert(recipient->GetSize() <= recipient->GetMaxSize());
-
-  // TODO: release pages
-  // buffer_pool_manager->UnpinPage(GetPageId(), true /* is_dirty */);
-  // buffer_pool_manager->UnpinPage(recipient_page_id, true /* is_dirty */);
 }
 
 /*****************************************************************************
@@ -307,7 +303,7 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::MoveFirstToEndOf(BPlusTreeInternalPage *rec
   B_PLUS_TREE_INTERNAL_PAGE *parent_page = reinterpret_cast<B_PLUS_TREE_INTERNAL_PAGE*>(page->GetData());
   int value_idx = parent_page->ValueIndex(page_id);
   parent_page->SetKeyAt(value_idx /* index */, KeyAt(0 /* index */));
-  buffer_pool_manager->UnpinPage(parent_page_id, true /* is_dirty */);  
+  buffer_pool_manager->UnpinPage(parent_page_id, true /* is_dirty */);
 }
 
 /* 

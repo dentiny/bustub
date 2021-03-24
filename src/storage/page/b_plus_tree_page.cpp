@@ -43,7 +43,7 @@ void BPlusTreePage::SetMaxSize(int size) { max_size_ = size; }
  * if internal page, at least two entries.
  */
 int BPlusTreePage::GetMinSize() const {
-  return !IsRootPage() ? ((max_size_ + 1) / 2) : IsLeafPage() ? 1 : 2;
+  return !IsRootPage() ? (max_size_ / 2) : IsLeafPage() ? 1 : 2;
 }
 
 /*
@@ -62,5 +62,20 @@ void BPlusTreePage::SetPageId(page_id_t page_id) { page_id_ = page_id; }
  * Helper methods to set lsn
  */
 void BPlusTreePage::SetLSN(lsn_t lsn) { lsn_ = lsn; }
+
+/*
+ * Util concurrent index access.
+ * Note: IsSafeOp() method is invoked before actually operating on the page.
+ */
+bool BPlusTreePage::IsSafeOp(OpType op) {
+  int cur_size = GetSize();
+  if (op == OpType::SEARCH) {
+    return true;
+  } else if (op == OpType::INSERT) {
+    return cur_size < GetMaxSize();
+  } else {
+    return IsRootPage() ? (cur_size >= GetMinSize()) : (cur_size > GetMinSize()); 
+  }
+}
 
 }  // namespace bustub
