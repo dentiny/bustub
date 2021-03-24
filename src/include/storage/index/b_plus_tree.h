@@ -106,6 +106,10 @@ class BPlusTree {
 
   void UpdateRootPageId(int insert_record = 0);
 
+  // Util invoked at CoalesceOrRedistribute() method.
+  template<typename N>
+  bool GetSibling(InternalPage *parent_page, N *node, N **sibling);
+
   /* Debug Routines for FREE!! */
   void ToGraph(BPlusTreePage *page, BufferPoolManager *bpm, std::ofstream &out) const;
 

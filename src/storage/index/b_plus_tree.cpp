@@ -223,7 +223,83 @@ void BPLUSTREE_TYPE::Remove(const KeyType &key, Transaction *transaction) {
 INDEX_TEMPLATE_ARGUMENTS
 template <typename N>
 bool BPLUSTREE_TYPE::CoalesceOrRedistribute(N *node, Transaction *transaction) {
+  /*
+    (1) The page falls down of min size is root page, it could be either leaf or internal page.
+    (2) If sibling's size + input page's size <= page's max size, then coalesce.
+    (3) If sibling's size + input page's size > page's max size, then redistribute.
+  */
+
+  assert(node != nullptr);
+
+  // case1: The page falls down of min size is root page, it could be either leaf or internal page
+  if (node->IsRootPage()) {
+    return AdjustRoot(node);
+  }
+
+  // Fetch parent page.
+  page_id_t page_id = node->GetPageId();
+  page_id_t parent_page_id = node->GetParentPageId();
+  Page *page = buffer_pool_manager_->FetchPage(parent_page_id);
+  assert(page != nullptr);
+  InternalPage *parent_page = reinterpret_cast<InternalPage*>(page->GetData());
+
+  // Find the sibling node of input page.
+  N *sibling_page = nullptr;
+  bool is_sibling_prev = GetSibling(parent_page, node, &sibling_page);
+  assert(sibling_page != nullptr);
+  N *prev_node = is_sibling_prev ? sibling_page : node;
+  N *next_node = is_sibling_prev ? node : sibling_page;
+  page_id_t prev_page_id = prev_node->GetPageId();
+  // page_id_t next_page_id = next_node->GetPageId();
+  
+  // case2: If sibling's size + input page's size <= page's max size, then merge.
+  // Remove all items within next_node into prev_node.
+  if (prev_node->GetSize() + next_node->GetSize() <= next_node->GetSize()) {
+    // (1) Both prev_node and next_node is unpinned within Coalesce() method.
+    // (2) Parent page may involve chaining Coalesce/Redistribution, so it's unpinned here.
+    int index_in_parent = parent_page->ValueIndex(prev_page_id);
+    Coalesce(&prev_node, &next_node, &parent_page, index_in_parent, transaction);
+    buffer_pool_manager_->UnpinPage(parent_page_id, true /* is_dirty */);
+    return true;
+  }
+
+  // case3: If sibling's size + input page's size > page's max size, then redistribute.
+  // (1) If node_in_parent_index = 0, sibling->MoveFirstToEndOf(node);
+  // If node_in_parent_index != 0, sibling->MoveLastToFirstOf(node);
+  // (2) Both input node and sibling node is unpinned within Redistribute() method.
+  // (3) Parent page is unpinned here, and it's already flushed back to disk within MoveFirstToEndOf()
+  // and MoveLastToFirstOf() method.
+  int node_in_parent_index = parent_page->ValueIndex(page_id);
+  Redistribute(sibling_page, node, node_in_parent_index);
+  buffer_pool_manager_->UnpinPage(parent_page_id, false /* is_dirty */);
   return false;
+}
+
+/*
+ * Util method invoked only within CoalesceOrRedistribute() method.
+ * @return: true means sibling is previous node, false means it's next node.
+ */ 
+
+INDEX_TEMPLATE_ARGUMENTS
+template<typename N>
+bool BPLUSTREE_TYPE::GetSibling(InternalPage *parent_page, N *node, N **sibling) {
+  assert(parent_page != nullptr);
+  assert(node != nullptr);
+  assert(!node->IsRootPage());
+
+  // Fetch sibling page.
+  page_id_t page_id = node->GetPageId();
+  page_id_t parent_page_id = parent_page->GetPageId();
+  int index = parent_page->ValueIndex(page_id);
+  int sibling_index = index == 0 ? 1 : (index - 1);
+  page_id_t sibling_page_id = parent_page->ValueAt(sibling_index);
+  Page *page = buffer_pool_manager_->FetchPage(sibling_page_id);
+  assert(page != nullptr);
+  *sibling = reinterpret_cast<N*>(page->GetData());
+
+  // Unpin parent page.
+  buffer_pool_manager_->UnpinPage(parent_page_id, false /* is_dirty */);
+  return sibling_index < index;
 }
 
 /*
