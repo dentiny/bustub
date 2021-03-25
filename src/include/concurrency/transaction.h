@@ -225,13 +225,15 @@ class Transaction {
    * Checks whether a page belongs to the deleted page set.
    * @param page_id id of the page to be marked as deleted
    */
-  inline bool IsWithinDeletedPageSet(page_id_t page_id) { return deleted_page_set_->find(page_id) != deleted_page_set_->end(); }  
+  inline bool IsWithinDeletedPageSet(page_id_t page_id) {
+    return deleted_page_set_->find(page_id) != deleted_page_set_->end();
+  }
 
   /**
    * Removes a page from the deleted page set.
    * @param page_id id of the page to be marked as deleted
    */
-  inline void RemoveFromDeletedPageSet(page_id_t page_id) { deleted_page_set_->insert(page_id); }  
+  inline void RemoveFromDeletedPageSet(page_id_t page_id) { deleted_page_set_->insert(page_id); }
 
   /** @return the set of resources under a shared lock */
   inline std::shared_ptr<std::unordered_set<RID>> GetSharedLockSet() { return shared_lock_set_; }

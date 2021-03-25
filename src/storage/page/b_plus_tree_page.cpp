@@ -74,7 +74,7 @@ bool BPlusTreePage::IsSafeOp(OpType op) {
   } else if (op == OpType::INSERT) {
     return cur_size < GetMaxSize();
   } else {
-    return IsRootPage() ? (cur_size >= GetMinSize()) : (cur_size > GetMinSize()); 
+    return IsRootPage() ? (cur_size >= GetMinSize()) : (cur_size > GetMinSize());
   }
 }
 

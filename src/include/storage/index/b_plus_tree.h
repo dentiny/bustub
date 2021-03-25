@@ -10,6 +10,8 @@
 //===----------------------------------------------------------------------===//
 #pragma once
 
+#include <atomic>
+#include <iostream>
 #include <queue>
 #include <string>
 #include <vector>
@@ -79,7 +81,8 @@ class BPlusTree {
 
   // expose for test purpose
   // Return type is LeafPage*, should reinterpret_cast<LeafPage*> when use.
-  Page *FindLeafPage(const KeyType &key, bool leftMost = false);
+  BPlusTreePage *FindLeafPage(const KeyType &key, bool leftMost = false,
+                      Transaction *transaction = nullptr, OpType op = OpType::SEARCH);
 
  private:
   void StartNewTree(const KeyType &key, const ValueType &value);
@@ -90,7 +93,7 @@ class BPlusTree {
                         Transaction *transaction = nullptr);
 
   template <typename N>
-  N *Split(N *node);
+  N *Split(N *node, Transaction *transaction);
 
   template <typename N>
   bool CoalesceOrRedistribute(N *node, Transaction *transaction = nullptr);
@@ -111,7 +114,8 @@ class BPlusTree {
   bool GetSibling(InternalPage *parent_page, N *node, N **sibling);
 
   // Apply Basic Latch Crabbing Protocol to fetch new page.
-  BPlusTreePage *CrabbingProtocalFetchPage(page_id_t page_id, page_id_t prev_page_id, Transaction *transaction, OpType op);
+  BPlusTreePage *CrabbingProtocalFetchPage(page_id_t page_id, page_id_t prev_page_id,
+                                            Transaction *transaction, OpType op);
 
   // Unlock and unpin/delete page within transaction.
   void FreePageWithinTransaction(page_id_t page_id, Transaction *transaction, bool exclusive);
@@ -144,7 +148,7 @@ class BPlusTree {
   inline void Unlock(page_id_t page_id, bool exclusive) {
     Page *page = buffer_pool_manager_->FetchPage(page_id);
     assert(page != nullptr);
-    Unlock(exclusive, page);
+    Unlock(page, exclusive);
   }
 
   /* Debug Routines for FREE!! */
@@ -154,7 +158,7 @@ class BPlusTree {
 
   // member variable
   std::string index_name_;
-  page_id_t root_page_id_;
+  std::atomic<page_id_t> root_page_id_;
   BufferPoolManager *buffer_pool_manager_;
   KeyComparator comparator_;
   int leaf_max_size_;

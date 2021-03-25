@@ -85,8 +85,25 @@ class ReaderWriterLatch {
     }
   }
 
+  bool IsWriteLocked() const {
+    std::lock_guard<mutex_t> lck(mutex_);
+    return writer_entered_ && reader_count_ == 0;
+  }
+
+  bool IsReadLocked() const {
+    std::lock_guard<mutex_t> lck(mutex_);
+    return reader_count_ > 0;
+  }
+
+  bool IsLocked() const {
+    std::lock_guard<mutex_t> lck(mutex_);
+    bool is_read_locked = reader_count_ > 0;
+    bool is_write_locked = writer_entered_ && reader_count_ == 0;
+    return is_read_locked || is_write_locked;
+  }
+
  private:
-  mutex_t mutex_;
+  mutable mutex_t mutex_;
   cond_t writer_;
   cond_t reader_;
   uint32_t reader_count_{0};
