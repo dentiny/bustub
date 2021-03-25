@@ -40,6 +40,7 @@ bool BPLUSTREE_TYPE::IsEmpty() const { return root_page_id_ == INVALID_PAGE_ID; 
  * Return the only value that associated with input key
  * This method is used for point query
  * @return : true means key exists
+ * Note: GetValue() method does not guarentee a transaction.
  */
 INDEX_TEMPLATE_ARGUMENTS
 bool BPLUSTREE_TYPE::GetValue(const KeyType &key, std::vector<ValueType> *result, Transaction *transaction) {
@@ -63,6 +64,7 @@ bool BPLUSTREE_TYPE::GetValue(const KeyType &key, std::vector<ValueType> *result
  */
 INDEX_TEMPLATE_ARGUMENTS
 bool BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transaction *transaction) {
+  assert(transaction != nullptr);
   if (IsEmpty()) {
     StartNewTree(key, value);
     return true;
@@ -105,6 +107,8 @@ void BPLUSTREE_TYPE::StartNewTree(const KeyType &key, const ValueType &value) {
  */
 INDEX_TEMPLATE_ARGUMENTS
 bool BPLUSTREE_TYPE::InsertIntoLeaf(const KeyType &key, const ValueType &value, Transaction *transaction) {
+  assert(transaction != nullptr);
+
   LeafPage *leaf_page = reinterpret_cast<LeafPage*>(FindLeafPage(key, false /* leftmost */,
                                                                   transaction, OpType::INSERT));
   assert(leaf_page != nullptr);
@@ -138,6 +142,9 @@ bool BPLUSTREE_TYPE::InsertIntoLeaf(const KeyType &key, const ValueType &value, 
 INDEX_TEMPLATE_ARGUMENTS
 template <typename N>
 N *BPLUSTREE_TYPE::Split(N *node, Transaction *transaction) {
+  assert(node != nullptr);
+  assert(transaction != nullptr);
+
   // Allocate a new page for the new node.
   page_id_t new_page_id;
   Page *new_page = buffer_pool_manager_->NewPage(&new_page_id);
@@ -168,6 +175,10 @@ N *BPLUSTREE_TYPE::Split(N *node, Transaction *transaction) {
 INDEX_TEMPLATE_ARGUMENTS
 void BPLUSTREE_TYPE::InsertIntoParent(BPlusTreePage *old_node, const KeyType &key, BPlusTreePage *new_node,
                                       Transaction *transaction) {
+  assert(old_node != nullptr);
+  assert(new_node != nullptr);
+  assert(transaction != nullptr);
+
   // If old node is the root page of B+ tree, allocate parent page and update root page id.
   if (old_node->IsRootPage()) {
     page_id_t root_page_id = INVALID_PAGE_ID;  // placeholder
@@ -214,15 +225,18 @@ void BPLUSTREE_TYPE::InsertIntoParent(BPlusTreePage *old_node, const KeyType &ke
  */
 INDEX_TEMPLATE_ARGUMENTS
 void BPLUSTREE_TYPE::Remove(const KeyType &key, Transaction *transaction) {
+  assert(transaction != nullptr);
+
   if (IsEmpty()) {
     return;
   }
+
   LeafPage *leaf = reinterpret_cast<LeafPage*>(FindLeafPage(key, false /* leftmost */, transaction, OpType::DELETE));
   int cur_size = leaf->RemoveAndDeleteRecord(key, comparator_);
   if (cur_size < leaf->GetMinSize()) {
     CoalesceOrRedistribute(leaf, transaction);
   }
-  buffer_pool_manager_->UnpinPage(leaf->GetPageId(), true /* is_dirty */);
+  FreePageWithinTransaction(leaf->GetPageId(), transaction, true /* exclusive */);
 }
 
 /*
@@ -242,14 +256,21 @@ bool BPLUSTREE_TYPE::CoalesceOrRedistribute(N *node, Transaction *transaction) {
   */
 
   assert(node != nullptr);
+  assert(transaction != nullptr);
+  page_id_t page_id = node->GetPageId();
 
   // case1: The page falls down of min size is root page, it could be either leaf or internal page
+  // If the target node is to be deleted, add it to transaction's deleted_page_set_, clear it at
+  // FreePageWithinTransaction() method.
   if (node->IsRootPage()) {
-    return AdjustRoot(node);
+    bool to_delete_node = AdjustRoot(node);
+    if (to_delete_node) {
+      transaction->AddIntoDeletedPageSet(page_id);
+    }
+    return to_delete_node;
   }
 
   // Fetch parent page.
-  page_id_t page_id = node->GetPageId();
   page_id_t parent_page_id = node->GetParentPageId();
   Page *page = buffer_pool_manager_->FetchPage(parent_page_id);
   assert(page != nullptr);
@@ -331,6 +352,8 @@ template <typename N>
 bool BPLUSTREE_TYPE::Coalesce(N **neighbor_node, N **node,
                               BPlusTreeInternalPage<KeyType, page_id_t, KeyComparator> **parent, int index_in_parent,
                               Transaction *transaction) {
+  assert(transaction != nullptr);
+
   // Note:
   // (1) Both pages are unpinned not in MoveAllTo() method. Instead they're unpinned here.
   // (2) neighbor_node(recipient) is the previous node as node(method issuer).
@@ -343,8 +366,8 @@ bool BPLUSTREE_TYPE::Coalesce(N **neighbor_node, N **node,
   page_id_t recipient_page_id = recipient_page->GetPageId();
   buffer_pool_manager_->UnpinPage(recipient_page_id, true /* is_dirty */);
   buffer_pool_manager_->UnpinPage(issuer_page_id, true /* is_dirty */);
-  buffer_pool_manager_->DeletePage(issuer_page_id);
-
+  transaction->AddIntoDeletedPageSet(issuer_page_id);
+  
   // Update parent page, and decide whether further coalesce and redistribution is needed.
   BPlusTreeInternalPage<KeyType, page_id_t, KeyComparator> *parent_page = *parent;
   parent_page->Remove(index_in_parent);
@@ -367,6 +390,9 @@ bool BPLUSTREE_TYPE::Coalesce(N **neighbor_node, N **node,
 INDEX_TEMPLATE_ARGUMENTS
 template <typename N>
 void BPLUSTREE_TYPE::Redistribute(N *neighbor_node, N *node, int index) {
+  assert(neighbor_node != nullptr);
+  assert(node != nullptr);
+
   // Note:
   // (1) Both MoveFirstToEndOf() and MoveLastToFrontOf() method don't unpin any of input pages.
   // (2) Instead, they are both unpinned here.
@@ -375,8 +401,8 @@ void BPLUSTREE_TYPE::Redistribute(N *neighbor_node, N *node, int index) {
   } else {
     neighbor_node->MoveLastToFrontOf(node, buffer_pool_manager_);
   }
-  buffer_pool_manager_->UnpinPage(node->GetPageId(), true /* is_dirty */);
-  buffer_pool_manager_->UnpinPage(neighbor_node->GetPageId(), true /* is_dirty */);
+  // buffer_pool_manager_->UnpinPage(node->GetPageId(), true /* is_dirty */);
+  // buffer_pool_manager_->UnpinPage(neighbor_node->GetPageId(), true /* is_dirty */);
 }
 
 /*
@@ -410,8 +436,8 @@ bool BPLUSTREE_TYPE::AdjustRoot(BPlusTreePage *old_root_node) {
     buffer_pool_manager_->UnpinPage(root_page_id_, true /* is_dirty */);
 
     // Delete current root page
-    buffer_pool_manager_->UnpinPage(old_root_node->GetPageId(), false /* is_dirty */);
-    buffer_pool_manager_->DeletePage(old_root_node->GetPageId());
+    // buffer_pool_manager_->UnpinPage(old_root_node->GetPageId(), false /* is_dirty */);
+    // buffer_pool_manager_->DeletePage(old_root_node->GetPageId());
   }
 
   // case 2: when you delete the last element in whole b+ tree
@@ -419,8 +445,8 @@ bool BPLUSTREE_TYPE::AdjustRoot(BPlusTreePage *old_root_node) {
   if (old_root_node->IsLeafPage()) {
     assert(old_root_node->GetSize() == 0);
     assert(old_root_node->GetParentPageId() == INVALID_PAGE_ID);
-    buffer_pool_manager_->UnpinPage(root_page_id_, false /* is_dirty */);
-    buffer_pool_manager_->DeletePage(root_page_id_);
+    // buffer_pool_manager_->UnpinPage(root_page_id_, false /* is_dirty */);
+    // buffer_pool_manager_->DeletePage(root_page_id_);
     root_page_id_ = INVALID_PAGE_ID;
     UpdateRootPageId(0 /* update */);
     return true;
@@ -442,6 +468,7 @@ INDEX_TEMPLATE_ARGUMENTS
 INDEXITERATOR_TYPE BPLUSTREE_TYPE::begin() {
   KeyType key{};  // placeholder
   LeafPage *leftmost_leaf = reinterpret_cast<LeafPage*>(FindLeafPage(key, true /* leftmost */));
+  Unlock(leftmost_leaf->GetPageId(), false /* exclusive */);
   return INDEXITERATOR_TYPE(leftmost_leaf, 0 /* index */, buffer_pool_manager_);
 }
 
@@ -457,6 +484,7 @@ INDEXITERATOR_TYPE BPLUSTREE_TYPE::Begin(const KeyType &key) {
     return INDEXITERATOR_TYPE(nullptr /* leaf */, 0 /* index */, buffer_pool_manager_);
   }
   int idx = leaf->KeyIndex(key, comparator_);
+  Unlock(leaf->GetPageId(), false /* exclusive */);
   return INDEXITERATOR_TYPE(leaf, idx, buffer_pool_manager_);
 }
 
@@ -477,12 +505,13 @@ INDEXITERATOR_TYPE BPLUSTREE_TYPE::end() {
  * Find leaf page containing particular key, if leftMost flag == true, find
  * the left most leaf page
  *
- * Note: leftmost is used when fetch begin iterator.
+ * Note:
+ * (1) leftmost is used when fetch begin iterator.
+ * (2) This method does not guarentee a transaction.
  */
 INDEX_TEMPLATE_ARGUMENTS
 BPlusTreePage *BPLUSTREE_TYPE::FindLeafPage(const KeyType &key, bool leftMost, Transaction *transaction, OpType op) {
   assert(!IsEmpty());  // FindLeafPage should be called after the B+ tree is constructed
-  // bool exclusive = op != OpType::SEARCH;
 
   page_id_t cur_page_id = root_page_id_;
   BPlusTreePage *cur_page = CrabbingProtocalFetchPage(cur_page_id, INVALID_PAGE_ID /* prev_page */, transaction, op);
@@ -525,11 +554,10 @@ BPlusTreePage *BPLUSTREE_TYPE::CrabbingProtocalFetchPage(page_id_t page_id, page
 
 /*
  * Unlock and unpin/delete page within transaction.
+ * Note: FreePageWithinTransaction() method does not guarentee a transaction.
  */
 INDEX_TEMPLATE_ARGUMENTS
 void BPLUSTREE_TYPE::FreePageWithinTransaction(page_id_t page_id, Transaction *transaction, bool exclusive) {
-  // TODO: root page unlock
-
   // If there's no transaction, unpin current page directly.
   if (transaction == nullptr) {
     Unlock(page_id, exclusive);

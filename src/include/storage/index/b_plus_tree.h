@@ -21,6 +21,13 @@
 #include "storage/page/b_plus_tree_internal_page.h"
 #include "storage/page/b_plus_tree_leaf_page.h"
 
+/*
+ * Notes:
+ * (1) Insert() and Remove() are required to give a transaction, while GetValue() is not.
+ * (2) For Insert() and Remove(), they have to unlock pages and unpin pages fetched, call FreePageWithinTransaction()
+ * at the end of execution; while for iterator fetching, they keep the reference to page, so only unlock needed.
+ */
+
 namespace bustub {
 
 #define BPLUSTREE_TYPE BPlusTree<KeyType, ValueType, KeyComparator>

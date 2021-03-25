@@ -81,6 +81,8 @@ TEST(BPlusTreeTests, DeleteTest1) {
     size = size + 1;
   }
 
+  std::cout << "Iteration 2 done" << std::endl;
+
   EXPECT_EQ(size, 3);
 
   bpm->UnpinPage(HEADER_PAGE_ID, true);
