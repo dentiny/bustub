@@ -1,6 +1,7 @@
 #include "catalog/table_generator.h"
 
 #include <algorithm>
+#include <iostream>
 #include <random>
 #include <vector>
 
@@ -128,6 +129,10 @@ void TableGenerator::GenerateTestTables() {
     }
     Schema schema(cols);
     auto info = exec_ctx_->GetCatalog()->CreateTable(exec_ctx_->GetTransaction(), table_meta.name_, schema);
+
+    std::cout << "get info within TableGenerator GenerateTestTables()" << std::endl;
+    std::cout << "info is null: " << (info == nullptr ? "true" : "false") << std::endl;
+
     FillTable(info, &table_meta);
   }
 }

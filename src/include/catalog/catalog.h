@@ -77,12 +77,12 @@ class Catalog {
    */
   TableMetadata *CreateTable(Transaction *txn, const std::string &table_name, const Schema &schema) {
     BUSTUB_ASSERT(names_.count(table_name) == 0, "Table names should be unique!");
-    table_oid_t cur_table_oid = next_index_oid_++;
-    names_.emplace(table_name, cur_table_oid);
-    // emplace return type: pair<iterator, bool>
-    const auto& it = tables_.emplace(cur_table_oid, std::make_unique<TableMetadata>(
-      schema, table_name, std::make_unique<TableHeap>(bpm_, lock_manager_, log_manager_, txn), cur_table_oid));
-    return it.first->second.get();
+    table_oid_t cur_table_oid = next_table_oid_++;
+    names_[table_name] = cur_table_oid;
+    std::unique_ptr<TableHeap> table_heap = std::make_unique<TableHeap>(bpm_, lock_manager_, log_manager_, txn);
+    std::unique_ptr<TableMetadata> table_metadata = std::make_unique<TableMetadata>(schema, table_name, std::move(table_heap), cur_table_oid);
+    tables_[cur_table_oid] = std::move(table_metadata);
+    return tables_[cur_table_oid].get();
   }
 
   /** @return table metadata by name */
@@ -91,11 +91,7 @@ class Catalog {
     if (names_it == names_.end()) {
       throw std::out_of_range{table_name + " not found!"};
     }
-    const auto& tables_it = tables_.find(names_it->second);
-    if (tables_it == tables_.end()) {
-      throw std::out_of_range{"DB error: " + table_name + " not in found!"};
-    }
-    return tables_it->second.get();
+    return GetTable(names_it->second);
   }
 
   /** @return table metadata by oid */
@@ -123,12 +119,18 @@ class Catalog {
                          const Schema &schema, const Schema &key_schema, const std::vector<uint32_t> &key_attrs,
                          size_t keysize) {
     index_oid_t cur_index_oid = next_index_oid_++;
+    IndexMetadata *index_metadata = new IndexMetadata(index_name, table_name, &schema, key_attrs);
+    std::unique_ptr<Index> b_plus_index(new BPlusTreeIndex<KeyType, ValueType, KeyComparator>(index_metadata, bpm_));
+    std::unique_ptr<IndexInfo> index_info = std::make_unique<IndexInfo>(key_schema, index_name, std::move(b_plus_index), cur_index_oid, table_name, keysize);
+    indexes_[cur_index_oid] = std::move(index_info);
     index_names_[table_name][index_name] = cur_index_oid;
-    // emplace return type: pair<iterator, bool>
-    IndexMetadata *index_metadata = new IndexMetadata(index_name, table_name, &key_schema, key_attrs);
-    const auto& it = indexes_.emplace(cur_index_oid, std::make_unique<IndexInfo>(
-      key_schema, index_name, std::make_unique<Index>(index_metadata), cur_index_oid, table_name, keysize));
-    return it.first->second.get();
+
+    // Add index to every tuple.
+    auto table = GetTable(table_name)->table_.get();
+    for (auto it = table->Begin(txn); it != table->End(); ++it) {
+      index_info->index_->InsertEntry(it->KeyFromTuple(schema, key_schema, key_attrs), it->GetRid(), txn);
+    }
+    return indexes_[cur_index_oid].get();
   }
 
   IndexInfo *GetIndex(const std::string &index_name, const std::string &table_name) {
@@ -141,11 +143,7 @@ class Catalog {
     if (index_names_it2 == index_names_map.end()) {
       throw std::out_of_range{"GetIndex() method: " + index_name + " not found!"};
     }
-    const auto& indexes_it = indexes_.find(index_names_it2->second);
-    if (indexes_it == indexes_.end()) {
-      throw std::out_of_range{"DB error: " + index_name + " not in found!"};
-    }
-    return indexes_it->second.get();
+    return GetIndex(index_names_it2->second);
   }
 
   IndexInfo *GetIndex(index_oid_t index_oid) {
