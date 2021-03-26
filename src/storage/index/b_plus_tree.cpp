@@ -367,7 +367,7 @@ bool BPLUSTREE_TYPE::Coalesce(N **neighbor_node, N **node,
   buffer_pool_manager_->UnpinPage(recipient_page_id, true /* is_dirty */);
   buffer_pool_manager_->UnpinPage(issuer_page_id, true /* is_dirty */);
   transaction->AddIntoDeletedPageSet(issuer_page_id);
-  
+
   // Update parent page, and decide whether further coalesce and redistribution is needed.
   BPlusTreeInternalPage<KeyType, page_id_t, KeyComparator> *parent_page = *parent;
   parent_page->Remove(index_in_parent);

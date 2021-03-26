@@ -122,14 +122,56 @@ class Catalog {
   IndexInfo *CreateIndex(Transaction *txn, const std::string &index_name, const std::string &table_name,
                          const Schema &schema, const Schema &key_schema, const std::vector<uint32_t> &key_attrs,
                          size_t keysize) {
-    return nullptr;
+    index_oid_t cur_index_oid = next_index_oid_++;
+    index_names_[table_name][index_name] = cur_index_oid;
+    // emplace return type: pair<iterator, bool>
+    IndexMetadata *index_metadata = new IndexMetadata(index_name, table_name, &key_schema, key_attrs);
+    const auto& it = indexes_.emplace(cur_index_oid, std::make_unique<IndexInfo>(
+      key_schema, index_name, std::make_unique<Index>(index_metadata), cur_index_oid, table_name, keysize));
+    return it.first->second.get();
   }
 
-  IndexInfo *GetIndex(const std::string &index_name, const std::string &table_name) { return nullptr; }
+  IndexInfo *GetIndex(const std::string &index_name, const std::string &table_name) {
+    const auto& index_names_it1 = index_names_.find(table_name);
+    if (index_names_it1 == index_names_.end()) {
+      throw std::out_of_range{"GetIndex() method: " + table_name + " not found!"};
+    }
+    const auto& index_names_map = index_names_it1->second;
+    const auto& index_names_it2 = index_names_map.find(index_name);
+    if (index_names_it2 == index_names_map.end()) {
+      throw std::out_of_range{"GetIndex() method: " + index_name + " not found!"};
+    }
+    const auto& indexes_it = indexes_.find(index_names_it2->second);
+    if (indexes_it == indexes_.end()) {
+      throw std::out_of_range{"DB error: " + index_name + " not in found!"};
+    }
+    return indexes_it->second.get();
+  }
 
-  IndexInfo *GetIndex(index_oid_t index_oid) { return nullptr; }
+  IndexInfo *GetIndex(index_oid_t index_oid) {
+    const auto& indexes_it = indexes_.find(index_oid);
+    if (indexes_it == indexes_.end()) {
+      throw std::out_of_range{"index Id of " + std::to_string(index_oid) + " not found!"};
+    }
+    return indexes_it->second.get();
+  }
 
-  std::vector<IndexInfo *> GetTableIndexes(const std::string &table_name) { return std::vector<IndexInfo *>(); }
+  std::vector<IndexInfo *> GetTableIndexes(const std::string &table_name) {
+    const auto& index_names_it = index_names_.find(table_name);
+    if (index_names_it == index_names_.end()) {
+      throw std::out_of_range{"GetTableIndexes() method: " + table_name + " not found!"};
+    }
+    std::vector<IndexInfo*> index_info;
+    for (auto& [index_name, index_oid] : index_names_it->second) {
+      (void)index_name;  // unused
+      const auto& indexes_it = indexes_.find(index_oid);
+      if (indexes_it == indexes_.end()) {
+        throw std::out_of_range{"DB error: " + std::to_string(index_oid) + " not found!"};
+      }
+      index_info.push_back(indexes_it->second.get());
+    }
+    return index_info;
+  }
 
  private:
   [[maybe_unused]] BufferPoolManager *bpm_;
