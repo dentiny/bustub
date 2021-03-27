@@ -44,6 +44,10 @@ bool BPLUSTREE_TYPE::IsEmpty() const { return root_page_id_ == INVALID_PAGE_ID; 
  */
 INDEX_TEMPLATE_ARGUMENTS
 bool BPLUSTREE_TYPE::GetValue(const KeyType &key, std::vector<ValueType> *result, Transaction *transaction) {
+  if (IsEmpty()) {
+    return false;
+  }
+
   LeafPage *leaf_page = reinterpret_cast<LeafPage*>(FindLeafPage(key, false /* leftmost */, transaction));
   assert(leaf_page != nullptr);
   result->resize(1);
@@ -226,7 +230,6 @@ void BPLUSTREE_TYPE::InsertIntoParent(BPlusTreePage *old_node, const KeyType &ke
 INDEX_TEMPLATE_ARGUMENTS
 void BPLUSTREE_TYPE::Remove(const KeyType &key, Transaction *transaction) {
   assert(transaction != nullptr);
-
   if (IsEmpty()) {
     return;
   }

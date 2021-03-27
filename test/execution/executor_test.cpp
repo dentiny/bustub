@@ -295,22 +295,22 @@ TEST_F(ExecutorTest, SimpleRawInsertWithIndexTest) {
   std::vector<Tuple> result_set;
   GetExecutionEngine()->Execute(&scan_plan, &result_set, GetTxn(), GetExecutorContext());
 
-  std::cout << "ColA, ColB" << std::endl;
+  // std::cout << "ColA, ColB" << std::endl;
   // First value
   ASSERT_EQ(result_set[0].GetValue(out_schema, out_schema->GetColIdx("colA")).GetAs<int32_t>(), 100);
   ASSERT_EQ(result_set[0].GetValue(out_schema, out_schema->GetColIdx("colB")).GetAs<int32_t>(), 10);
-  std::cout << result_set[0].GetValue(out_schema, out_schema->GetColIdx("colA")).GetAs<int32_t>() << ", "
-            << result_set[0].GetValue(out_schema, out_schema->GetColIdx("colB")).GetAs<int32_t>() << std::endl;
+  // std::cout << result_set[0].GetValue(out_schema, out_schema->GetColIdx("colA")).GetAs<int32_t>() << ", "
+  //           << result_set[0].GetValue(out_schema, out_schema->GetColIdx("colB")).GetAs<int32_t>() << std::endl;
   // Second value
   ASSERT_EQ(result_set[1].GetValue(out_schema, out_schema->GetColIdx("colA")).GetAs<int32_t>(), 101);
   ASSERT_EQ(result_set[1].GetValue(out_schema, out_schema->GetColIdx("colB")).GetAs<int32_t>(), 11);
-  std::cout << result_set[1].GetValue(out_schema, out_schema->GetColIdx("colA")).GetAs<int32_t>() << ", "
-            << result_set[1].GetValue(out_schema, out_schema->GetColIdx("colB")).GetAs<int32_t>() << std::endl;
+  // std::cout << result_set[1].GetValue(out_schema, out_schema->GetColIdx("colA")).GetAs<int32_t>() << ", "
+  //           << result_set[1].GetValue(out_schema, out_schema->GetColIdx("colB")).GetAs<int32_t>() << std::endl;
   // Third value
   ASSERT_EQ(result_set[2].GetValue(out_schema, out_schema->GetColIdx("colA")).GetAs<int32_t>(), 102);
   ASSERT_EQ(result_set[2].GetValue(out_schema, out_schema->GetColIdx("colB")).GetAs<int32_t>(), 12);
-  std::cout << result_set[2].GetValue(out_schema, out_schema->GetColIdx("colA")).GetAs<int32_t>() << ", "
-            << result_set[2].GetValue(out_schema, out_schema->GetColIdx("colB")).GetAs<int32_t>() << std::endl;
+  // std::cout << result_set[2].GetValue(out_schema, out_schema->GetColIdx("colA")).GetAs<int32_t>() << ", "
+  //           << result_set[2].GetValue(out_schema, out_schema->GetColIdx("colB")).GetAs<int32_t>() << std::endl;
   // Size
   ASSERT_EQ(result_set.size(), 3);
   std::vector<RID> rids;
@@ -329,14 +329,14 @@ TEST_F(ExecutorTest, SimpleRawInsertWithIndexTest) {
     ASSERT_EQ(indexed_tuple.GetValue(out_schema, out_schema->GetColIdx("colB")).GetAs<int32_t>(),
               table_tuple.GetValue(out_schema, out_schema->GetColIdx("colB")).GetAs<int32_t>());
 
-    std::cout << indexed_tuple.GetValue(out_schema, out_schema->GetColIdx("colA")).GetAs<int32_t>() << ", "
-              << indexed_tuple.GetValue(out_schema, out_schema->GetColIdx("colB")).GetAs<int32_t>() << std::endl;
+    // std::cout << indexed_tuple.GetValue(out_schema, out_schema->GetColIdx("colA")).GetAs<int32_t>() << ", "
+    //           << indexed_tuple.GetValue(out_schema, out_schema->GetColIdx("colB")).GetAs<int32_t>() << std::endl;
   }
   delete key_schema;
 }
 
 // NOLINTNEXTLINE
-TEST_F(ExecutorTest, DISABLED_SimpleDeleteTest) {
+TEST_F(ExecutorTest, SimpleDeleteTest) {
   // SELECT colA FROM test_1 WHERE colA == 50
   // DELETE FROM test_1 WHERE colA == 50
   // SELECT colA FROM test_1 WHERE colA == 50
@@ -361,9 +361,9 @@ TEST_F(ExecutorTest, DISABLED_SimpleDeleteTest) {
   GetExecutionEngine()->Execute(scan_plan1.get(), &result_set, GetTxn(), GetExecutorContext());
 
   // Verify
-  std::cout << "colA" << std::endl;
+  // std::cout << "colA" << std::endl;
   for (const auto &tuple : result_set) {
-    std::cout << tuple.GetValue(out_schema1, out_schema1->GetColIdx("colA")).GetAs<int32_t>() << std::endl;
+    // std::cout << tuple.GetValue(out_schema1, out_schema1->GetColIdx("colA")).GetAs<int32_t>() << std::endl;
     ASSERT_TRUE(tuple.GetValue(out_schema1, out_schema1->GetColIdx("colA")).GetAs<int32_t>() == 50);
   }
   ASSERT_EQ(result_set.size(), 1);
