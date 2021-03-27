@@ -44,5 +44,19 @@ class IndexScanExecutor : public AbstractExecutor {
  private:
   /** The index scan plan node to be executed. */
   const IndexScanPlanNode *plan_;
+  const AbstractExpression *predicate_;
+
+  // IndexInfo and TableMetadata defined at catalog.h could get access to any member needed.
+  IndexInfo *index_info_;
+  TableMetadata *table_meta_;
+
+  // Workarounbd: explicit instantiation here doesn't work for all types of index. All instantiations see below:
+  // template class IndexIterator<GenericKey<4>, RID, GenericComparator<4>>;
+  // template class IndexIterator<GenericKey<8>, RID, GenericComparator<8>>;
+  // template class IndexIterator<GenericKey<16>, RID, GenericComparator<16>>;
+  // template class IndexIterator<GenericKey<32>, RID, GenericComparator<32>>;
+  // template class IndexIterator<GenericKey<64>, RID, GenericComparator<64>>;
+  IndexIterator<GenericKey<8>, RID, GenericComparator<8>> it_;
+  IndexIterator<GenericKey<8>, RID, GenericComparator<8>> end_it_;
 };
 }  // namespace bustub

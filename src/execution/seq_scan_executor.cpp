@@ -30,7 +30,7 @@ bool SeqScanExecutor::Next(Tuple *tuple, RID *rid) {
     cur_tuple = *table_iter_;
     ++table_iter_;
     if (predicate_ == nullptr || predicate_->Evaluate(&cur_tuple, &table_metadata_->schema_).GetAs<bool>()) {
-      const Schema* schema = plan_->OutputSchema();
+      const Schema *schema = plan_->OutputSchema();
       const auto& columns = schema->GetColumns();
       uint32_t column_count = schema->GetColumnCount();
       std::vector<Value> values(column_count);
