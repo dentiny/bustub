@@ -436,7 +436,7 @@ TEST_F(ExecutorTest, DISABLED_SimpleNestedLoopJoinTest) {
 }
 
 // NOLINTNEXTLINE
-TEST_F(ExecutorTest, DISABLED_SimpleAggregationTest) {
+TEST_F(ExecutorTest, SimpleAggregationTest) {
   // SELECT COUNT(colA), SUM(colA), min(colA), max(colA) from test_1;
   std::unique_ptr<AbstractPlanNode> scan_plan;
   const Schema *scan_schema;
@@ -479,15 +479,15 @@ TEST_F(ExecutorTest, DISABLED_SimpleAggregationTest) {
   ASSERT_EQ(minA_val, 0);
   // Maximum should be TEST1_SIZE - 1
   ASSERT_EQ(maxA_val, TEST1_SIZE - 1);
-  std::cout << countA_val << std::endl;
-  std::cout << sumA_val << std::endl;
-  std::cout << minA_val << std::endl;
-  std::cout << maxA_val << std::endl;
+  // std::cout << countA_val << std::endl;
+  // std::cout << sumA_val << std::endl;
+  // std::cout << minA_val << std::endl;
+  // std::cout << maxA_val << std::endl;
   ASSERT_EQ(result_set.size(), 1);
 }
 
 // NOLINTNEXTLINE
-TEST_F(ExecutorTest, DISABLED_SimpleGroupByAggregation) {
+TEST_F(ExecutorTest, SimpleGroupByAggregation) {
   // SELECT count(colA), colB, sum(colC) FROM test_1 Group By colB HAVING count(colA) > 100
   std::unique_ptr<AbstractPlanNode> scan_plan;
   const Schema *scan_schema;
@@ -529,7 +529,7 @@ TEST_F(ExecutorTest, DISABLED_SimpleGroupByAggregation) {
   GetExecutionEngine()->Execute(agg_plan.get(), &result_set, GetTxn(), GetExecutorContext());
 
   std::unordered_set<int32_t> encountered;
-  std::cout << "countA, colB, sumC" << std::endl;
+  // std::cout << "countA, colB, sumC" << std::endl;
   for (const auto &tuple : result_set) {
     // Should have countA > 100
     ASSERT_GT(tuple.GetValue(agg_schema, agg_schema->GetColIdx("countA")).GetAs<int32_t>(), 100);
@@ -540,9 +540,9 @@ TEST_F(ExecutorTest, DISABLED_SimpleGroupByAggregation) {
     // Sanity check: ColB should also be within [0, 10).
     ASSERT_TRUE(0 <= colB && colB < 10);
 
-    std::cout << tuple.GetValue(agg_schema, agg_schema->GetColIdx("countA")).GetAs<int32_t>() << ", "
-              << tuple.GetValue(agg_schema, agg_schema->GetColIdx("colB")).GetAs<int32_t>() << ", "
-              << tuple.GetValue(agg_schema, agg_schema->GetColIdx("sumC")).GetAs<int32_t>() << std::endl;
+    // std::cout << tuple.GetValue(agg_schema, agg_schema->GetColIdx("countA")).GetAs<int32_t>() << ", "
+    //           << tuple.GetValue(agg_schema, agg_schema->GetColIdx("colB")).GetAs<int32_t>() << ", "
+    //           << tuple.GetValue(agg_schema, agg_schema->GetColIdx("sumC")).GetAs<int32_t>() << std::endl;
   }
 }
 
