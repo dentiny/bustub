@@ -42,6 +42,7 @@ TEST(CatalogTest, CreateTableTest) {
 
   // Notice that this test case doesn't check anything! :(
   // It is up to you to extend it
+  EXPECT_NE(nullptr, catalog->GetTable("potato"));
 
   delete catalog;
   delete bpm;

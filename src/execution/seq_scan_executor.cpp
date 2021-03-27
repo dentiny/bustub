@@ -17,45 +17,31 @@ SeqScanExecutor::SeqScanExecutor(ExecutorContext *exec_ctx, const SeqScanPlanNod
   AbstractExecutor(exec_ctx),
   plan_(plan),
   predicate_(plan_->GetPredicate()),
-  schema_(plan_->OutputSchema()) {
-  Catalog *catalog = exec_ctx->GetCatalog();
-  table_oid_t table_oid = plan->GetTableOid();
-  TableMetadata *table_metadata = catalog->GetTable(table_oid);
-  table_heap_ = table_metadata->table_.get();
-  Transaction *transaction = exec_ctx->GetTransaction();
-  table_iter_ = std::make_unique<TableIterator>(table_heap_->Begin(transaction));
-}
+  table_metadata_(exec_ctx_->GetCatalog()->GetTable(plan_->GetTableOid())),
+  table_iter_(table_metadata_->table_->Begin(exec_ctx_->GetTransaction())),
+  table_iter_end_(table_metadata_->table_->End()) {}
 
 void SeqScanExecutor::Init() {}
 
 bool SeqScanExecutor::Next(Tuple *tuple, RID *rid) {
-  do {
-    if (*table_iter_ == table_heap_->End()) {
-      return false;
-    }
-
-    // Get tuple and assign to tuple.
-    Tuple cur_tuple = **table_iter_;
-    if (schema_ == nullptr) {
-      *tuple = cur_tuple;
-    } else {
-      std::vector<Value> res;
-      const std::vector<Column>& columns = schema_->GetColumns();
-      for (auto& col : columns) {
-        Value value = col.GetExpr()->Evaluate(&cur_tuple, schema_);
-        res.emplace_back(value);
+  Tuple cur_tuple;
+  while (table_iter_ != table_iter_end_) {
+    *rid = table_iter_->GetRid();
+    cur_tuple = *table_iter_;
+    ++table_iter_;
+    if (predicate_ == nullptr || predicate_->Evaluate(&cur_tuple, &table_metadata_->schema_).GetAs<bool>()) {
+      const Schema* schema = plan_->OutputSchema();
+      const auto& columns = schema->GetColumns();
+      uint32_t column_count = schema->GetColumnCount();
+      std::vector<Value> values(column_count);
+      for (uint32_t ii = 0; ii < column_count; ++ii) {
+        values[ii] = columns[ii].GetExpr()->Evaluate(&cur_tuple, &table_metadata_->schema_);
       }
-      *tuple = Tuple(res, schema_);
-    }
-    ++(*table_iter_);
-
-    if (predicate_ == nullptr) {
+      *tuple = Tuple(values, schema);
       return true;
     }
-  } while (!predicate_->Evaluate(tuple, schema_).GetAs<bool>());  // iterate until gets the correct result
-
-  // Current tuple is valid, and iterator hasn't reached the end.
-  return true;
+  }
+  return false;
 }
 
 }  // namespace bustub
