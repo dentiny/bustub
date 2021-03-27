@@ -53,6 +53,8 @@ bool SeqScanExecutor::Next(Tuple *tuple, RID *rid) {
       return true;
     }
   } while (!predicate_->Evaluate(tuple, schema_).GetAs<bool>());  // iterate until gets the correct result
+
+  // Current tuple is valid, and iterator hasn't reached the end.
   return true;
 }
 

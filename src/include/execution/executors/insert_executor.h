@@ -47,5 +47,10 @@ class InsertExecutor : public AbstractExecutor {
  private:
   /** The insert plan node to be executed. */
   const InsertPlanNode *plan_;
+  Transaction *transaction_;  // third argument argument of TableHeap.InsertTuple() is Transaction*.
+  const TableMetadata *table_metadata_;
+  const Schema schema_;
+  TableHeap* table_heap_;
+  std::unique_ptr<AbstractExecutor> child_executor_;
 };
 }  // namespace bustub
