@@ -83,7 +83,8 @@ class Catalog {
 
     // tables_: <table_oid, unique_ptr<TableMetadata*>>
     std::unique_ptr<TableHeap> table_heap = std::make_unique<TableHeap>(bpm_, lock_manager_, log_manager_, txn);
-    std::unique_ptr<TableMetadata> table_metadata = std::make_unique<TableMetadata>(schema, table_name, std::move(table_heap), cur_table_oid);
+    std::unique_ptr<TableMetadata> table_metadata = std::make_unique<TableMetadata>(schema, table_name,
+      std::move(table_heap), cur_table_oid);
     tables_[cur_table_oid] = std::move(table_metadata);
     return tables_[cur_table_oid].get();
   }
@@ -133,8 +134,9 @@ class Catalog {
     // Create IndexMetadata, Index, and IndexInfo
     IndexMetadata *index_metadata = new IndexMetadata(index_name, table_name, &schema, key_attrs);
     Index *b_plus_index = new BPLUSTREE_INDEX_TYPE(index_metadata, bpm_);
-    IndexInfo *index_info = new IndexInfo(key_schema, index_name, std::unique_ptr<Index>(b_plus_index), next_index_oid_++, table_name, keysize);
-    
+    IndexInfo *index_info = new IndexInfo(key_schema, index_name, std::unique_ptr<Index>(b_plus_index),
+      next_index_oid_++, table_name, keysize);
+
     // Make sure table_name exists at index_names_. <table_name, <index_name, index_oid>>
     auto it = index_names_.find(table_name);
     if (it == index_names_.end()) {

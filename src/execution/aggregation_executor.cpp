@@ -17,7 +17,7 @@
 namespace bustub {
 
 AggregationExecutor::AggregationExecutor(ExecutorContext *exec_ctx, const AggregationPlanNode *plan,
-                                         std::unique_ptr<AbstractExecutor> &&child): 
+                                         std::unique_ptr<AbstractExecutor> &&child) :
   AbstractExecutor(exec_ctx),
   plan_(plan),
   child_(std::move(child)),

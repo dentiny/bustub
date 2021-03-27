@@ -20,9 +20,12 @@ IndexScanExecutor::IndexScanExecutor(ExecutorContext *exec_ctx, const IndexScanP
   table_meta_(exec_ctx_->GetCatalog()->GetTable(index_info_->table_name_)),
   // Note:
   // (1) dynamic_cast<> only works for base class pointer/reference to derived class's, otherwise return nullptr.
-  // (2) reinterpret_cast<>, widely used at b plus tree to cast page->GetData()(char*) to BPlusTreePage*, is for irrelative type casting.
-  it_(dynamic_cast<BPlusTreeIndex<GenericKey<8>, RID, GenericComparator<8>> *>(index_info_->index_.get())->GetBeginIterator()),
-  end_it_(dynamic_cast<BPlusTreeIndex<GenericKey<8>, RID, GenericComparator<8>> *>(index_info_->index_.get())->GetEndIterator()) {}
+  // (2) reinterpret_cast<>, widely used at b plus tree to cast page->GetData()(char*) to BPlusTreePage*,
+  // is for casting between irrelative types.
+  it_(dynamic_cast<BPlusTreeIndex<GenericKey<8>, RID, GenericComparator<8>> *>(
+    index_info_->index_.get())->GetBeginIterator()),
+  end_it_(dynamic_cast<BPlusTreeIndex<GenericKey<8>, RID, GenericComparator<8>> *>(
+    index_info_->index_.get())->GetEndIterator()) {}
 
 void IndexScanExecutor::Init() {}
 

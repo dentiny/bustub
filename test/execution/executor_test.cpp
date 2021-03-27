@@ -386,7 +386,7 @@ TEST_F(ExecutorTest, SimpleDeleteTest) {
 }
 
 // NOLINTNEXTLINE
-TEST_F(ExecutorTest, DISABLED_SimpleNestedLoopJoinTest) {
+TEST_F(ExecutorTest, SimpleNestedLoopJoinTest) {
   // SELECT test_1.colA, test_1.colB, test_2.col1, test_2.col3 FROM test_1 JOIN test_2 ON test_1.colA = test_2.col1
   std::unique_ptr<AbstractPlanNode> scan_plan1;
   const Schema *out_schema1;
@@ -426,13 +426,13 @@ TEST_F(ExecutorTest, DISABLED_SimpleNestedLoopJoinTest) {
   std::vector<Tuple> result_set;
   GetExecutionEngine()->Execute(join_plan.get(), &result_set, GetTxn(), GetExecutorContext());
   ASSERT_EQ(result_set.size(), 100);
-  std::cout << "ColA, ColB, Col1, Col3" << std::endl;
-  for (const auto &tuple : result_set) {
-    std::cout << tuple.GetValue(out_final, out_final->GetColIdx("colA")).GetAs<int32_t>() << ", "
-              << tuple.GetValue(out_final, out_final->GetColIdx("colB")).GetAs<int32_t>() << ", "
-              << tuple.GetValue(out_final, out_final->GetColIdx("col1")).GetAs<int16_t>() << ", "
-              << tuple.GetValue(out_final, out_final->GetColIdx("col3")).GetAs<int32_t>() << ", " << std::endl;
-  }
+  // std::cout << "ColA, ColB, Col1, Col3" << std::endl;
+  // for (const auto &tuple : result_set) {
+  //   std::cout << tuple.GetValue(out_final, out_final->GetColIdx("colA")).GetAs<int32_t>() << ", "
+  //             << tuple.GetValue(out_final, out_final->GetColIdx("colB")).GetAs<int32_t>() << ", "
+  //             << tuple.GetValue(out_final, out_final->GetColIdx("col1")).GetAs<int16_t>() << ", "
+  //             << tuple.GetValue(out_final, out_final->GetColIdx("col3")).GetAs<int32_t>() << ", " << std::endl;
+  // }
 }
 
 // NOLINTNEXTLINE
