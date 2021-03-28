@@ -47,13 +47,10 @@ class NestedLoopJoinExecutor : public AbstractExecutor {
   bool Next(Tuple *tuple, RID *rid) override;
 
  private:
-  std::vector<Tuple> SubQueryExecution(std::unique_ptr<AbstractExecutor> *executor, Tuple *tuple, RID *rid);
-
- private:
   /** The NestedLoop plan node to be executed. */
   const NestedLoopJoinPlanNode *plan_;
+  const AbstractExpression *predicate_;
   std::unique_ptr<AbstractExecutor> left_executor_;
   std::unique_ptr<AbstractExecutor> right_executor_;
-  std::vector<Tuple> out_result_;
 };
 }  // namespace bustub
