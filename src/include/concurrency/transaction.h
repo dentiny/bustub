@@ -247,6 +247,18 @@ class Transaction {
   /** @return true if rid is exclusively locked by this transaction */
   bool IsExclusiveLocked(const RID &rid) { return exclusive_lock_set_->find(rid) != exclusive_lock_set_->end(); }
 
+  /** Transaction is granted shared lock. */
+  void AddSharedLock(const RID &rid) { shared_lock_set_->insert(rid); }
+
+  /** Transaction is granted exclusive lock. */
+  void AddExclusiveLock(const RID &rid) { exclusive_lock_set_->insert(rid); }
+
+  /** Transaction needed to be removed shared lock. */
+  void RemoveSharedLock(const RID &rid) { shared_lock_set_->erase(rid); }
+
+  /** Transaction needed to be removed exclusive lock. */
+  void RemoveExclusiveLock(const RID &rid) { exclusive_lock_set_->erase(rid); }
+
   /** @return the current state of the transaction */
   inline TransactionState GetState() { return state_; }
 
