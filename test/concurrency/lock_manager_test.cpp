@@ -2,6 +2,7 @@
  * lock_manager_test.cpp
  */
 
+#include <iostream>
 #include <random>
 #include <thread>  // NOLINT
 
@@ -212,7 +213,7 @@ TEST(LockManagerTest, BasicCycleTest) {
   EXPECT_EQ(false, lock_mgr.HasCycle(&txn));
 }
 
-TEST(LockManagerTest, DISABLED_BasicDeadlockDetectionTest) {
+TEST(LockManagerTest, BasicDeadlockDetectionTest) {
   LockManager lock_mgr{};
   cycle_detection_interval = std::chrono::milliseconds(500);
   TransactionManager txn_mgr{&lock_mgr};
@@ -250,6 +251,9 @@ TEST(LockManagerTest, DISABLED_BasicDeadlockDetectionTest) {
     // This will block
     try {
       res = lock_mgr.LockExclusive(txn1, rid0);
+
+      std::cout << "The aborted transaction has escaped" << std::endl;
+
       EXPECT_EQ(TransactionState::ABORTED, txn1->GetState());
       txn_mgr.Abort(txn1);
     } catch (TransactionAbortException &e) {
