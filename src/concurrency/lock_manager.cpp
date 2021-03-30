@@ -62,6 +62,7 @@ bool LockManager::LockImpl(Transaction *txn, const RID &rid, LockMode lock_mode,
 
 // For 2PL, locks can be acquired at GRWOING state, and released at SHRINKING/COMMITED/ABORTED state.
 // For strict 2PL, exclusive locks can only be released at COMMITED/ABORTED state to avoud cascading aborts.
+// Note: TransactionManager will call ReleaseLocks() at Commit() and Abort() method.
 // (1) Check whether transaction could unlock on RID, update its state.
 // (2) Remove lock on LockRequestQueue and Transaction.
 // (3) Check whether the released lock can be granted to other transactions.
@@ -131,13 +132,80 @@ bool LockManager::Unlock(Transaction *txn, const RID &rid) {
   return true;
 }
 
-void LockManager::AddEdge(txn_id_t t1, txn_id_t t2) {}
+// Adds an edge in graph from t1 to t2(t2 waits for t1). If the edge already exists, nothing will be done.
+void LockManager::AddEdge(txn_id_t t1, txn_id_t t2) {
+  std::unique_lock<std::mutex> lck(waits_for_latch_);
+  auto& wait_txns = waits_for_[t1];
+  auto it = std::find_if(wait_txns.begin(), wait_txns.end(), [t2](const txn_id_t txn_id){ return txn_id == t2; });
+  if (it != wait_txns.end()) {
+    return;
+  }
+  wait_txns.push_back(t2);
+}
 
-void LockManager::RemoveEdge(txn_id_t t1, txn_id_t t2) {}
+// Remove an edge in graph from t1 to t2(t2 waits for t1). If the edge doesn't exists, nothing will be done.
+void LockManager::RemoveEdge(txn_id_t t1, txn_id_t t2) {
+  std::unique_lock<std::mutex> lck(waits_for_latch_);
+  auto& wait_txns = waits_for_[t1];
+  auto it = std::find_if(wait_txns.begin(), wait_txns.end(), [t2](const txn_id_t txn_id){ return txn_id == t2; });
+  if (it == wait_txns.end()) {
+    return;
+  }
+  wait_txns.erase(it);
+  if (wait_txns.empty()) {
+    waits_for_.erase(t1);
+  }
+}
 
-bool LockManager::HasCycle(txn_id_t *txn_id) { return false; }
+// waits_for_latch_ is guarenteed to be acquired here.
+// @return true for cycle exists, false for no cycle.
+bool LockManager::CycleDetectImpl(txn_id_t txn, const std::unordered_set<txn_id_t>& visited, txn_id_t *txn1, txn_id_t *txn2) {
+  if (waits_for_.find(txn) == waits_for_.end()) {
+    return false;
+  }
+  const auto& wait_txns = waits_for_[txn];
+  for (txn_id_t wait_txn : wait_txns) {
+    if (visited.find(wait_txn) != visited.end()) {
+      *txn1 = txn;
+      *txn2 = wait_txn;
+      return true;
+    }
 
-std::vector<std::pair<txn_id_t, txn_id_t>> LockManager::GetEdgeList() { return {}; }
+    std::unordered_set<txn_id_t> new_visited = visited;
+    new_visited.insert(wait_txn);
+    bool cycle_detected = CycleDetectImpl(wait_txn, new_visited, txn1, txn2);
+    if (cycle_detected) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// For efficiency consideration, return and abort the youngest transaction.
+bool LockManager::HasCycle(txn_id_t *txn_id) {
+  txn_id_t txn1, txn2;  // two inter-dependent transactions
+  std::unique_lock<std::mutex> lck(waits_for_latch_);
+  for (const auto& wait_txn_vec : waits_for_) {
+    txn_id_t cur_txn = wait_txn_vec.first;
+    bool cycle_detected = CycleDetectImpl(cur_txn, {} /* visited */, &txn1, &txn2);
+    if (cycle_detected) {
+      *txn_id = std::max(txn1, txn2);
+      return true;
+    }
+  }
+  return false;
+}
+
+std::vector<std::pair<txn_id_t, txn_id_t>> LockManager::GetEdgeList() {
+  std::vector<std::pair<txn_id_t, txn_id_t>> waits_for_pair;
+  std::unique_lock<std::mutex> lck(waits_for_latch_);
+  for (auto& [txn, wait_txns] : waits_for_) {
+    for (txn_id_t wait_txn : wait_txns) {
+      waits_for_pair.emplace_back(txn, wait_txn);
+    }
+  }
+  return waits_for_pair;
+}
 
 void LockManager::RunCycleDetection() {
   while (enable_cycle_detection_) {

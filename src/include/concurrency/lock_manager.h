@@ -19,6 +19,7 @@
 #include <memory>
 #include <mutex>  // NOLINT
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -197,10 +198,15 @@ class LockManager {
   void RunCycleDetection();
 
  private:
+  // Cycle detection util.
+  bool CycleDetectImpl(txn_id_t txn, const std::unordered_set<txn_id_t>& visited, txn_id_t *txn1, txn_id_t *txn2);
+
+  // Util for all lock methods.
   bool LockImpl(Transaction *txn, const RID &rid, LockMode lock_mode, bool is_upgrade);
 
  private:
   std::mutex latch_;  // mutex at lock_table granularity
+  std::mutex waits_for_latch_;  // mutex for waits_for_
   std::atomic<bool> enable_cycle_detection_;
   std::thread *cycle_detection_thread_;
 

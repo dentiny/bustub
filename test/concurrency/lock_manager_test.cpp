@@ -153,7 +153,7 @@ void UpgradeTest() {
 }
 TEST(LockManagerTest, UpgradeLockTest) { UpgradeTest(); }
 
-TEST(LockManagerTest, DISABLED_GraphEdgeTest) {
+TEST(LockManagerTest, GraphEdgeTest) {
   LockManager lock_mgr{};
   TransactionManager txn_mgr{&lock_mgr};
   const int num_nodes = 100;
@@ -195,7 +195,7 @@ TEST(LockManagerTest, DISABLED_GraphEdgeTest) {
   }
 }
 
-TEST(LockManagerTest, DISABLED_BasicCycleTest) {
+TEST(LockManagerTest, BasicCycleTest) {
   LockManager lock_mgr{}; /* Use Deadlock detection */
   TransactionManager txn_mgr{&lock_mgr};
 
