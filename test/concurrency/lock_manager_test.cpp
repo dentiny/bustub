@@ -251,9 +251,6 @@ TEST(LockManagerTest, BasicDeadlockDetectionTest) {
     // This will block
     try {
       res = lock_mgr.LockExclusive(txn1, rid0);
-
-      std::cout << "The aborted transaction has escaped" << std::endl;
-
       EXPECT_EQ(TransactionState::ABORTED, txn1->GetState());
       txn_mgr.Abort(txn1);
     } catch (TransactionAbortException &e) {

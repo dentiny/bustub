@@ -70,6 +70,9 @@ bool LockManager::LockImpl(Transaction *txn, const RID &rid, LockMode lock_mode,
 bool LockManager::Unlock(Transaction *txn, const RID &rid) {
   // Acquire lock on RID granularity.
   std::unique_lock<std::mutex> lock_table_latch(latch_);
+  if (lock_table_.find(rid) == lock_table_.end()) {
+    return false;
+  }
   LockRequestQueue& lock_request_queue = lock_table_[rid];
   std::list<LockRequest>& request_queue = lock_request_queue.request_queue_;
   std::unique_lock<std::mutex> request_queue_lock(lock_request_queue.latch_);
