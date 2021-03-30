@@ -134,7 +134,6 @@ bool LockManager::Unlock(Transaction *txn, const RID &rid) {
 
 // Adds an edge in graph from t1 to t2(t2 waits for t1). If the edge already exists, nothing will be done.
 void LockManager::AddEdge(txn_id_t t1, txn_id_t t2) {
-  std::unique_lock<std::mutex> lck(waits_for_latch_);
   auto& wait_txns = waits_for_[t1];
   auto it = std::find_if(wait_txns.begin(), wait_txns.end(), [t2](const txn_id_t txn_id){ return txn_id == t2; });
   if (it != wait_txns.end()) {
@@ -145,7 +144,6 @@ void LockManager::AddEdge(txn_id_t t1, txn_id_t t2) {
 
 // Remove an edge in graph from t1 to t2(t2 waits for t1). If the edge doesn't exists, nothing will be done.
 void LockManager::RemoveEdge(txn_id_t t1, txn_id_t t2) {
-  std::unique_lock<std::mutex> lck(waits_for_latch_);
   auto& wait_txns = waits_for_[t1];
   auto it = std::find_if(wait_txns.begin(), wait_txns.end(), [t2](const txn_id_t txn_id){ return txn_id == t2; });
   if (it == wait_txns.end()) {
@@ -184,7 +182,6 @@ bool LockManager::CycleDetectImpl(txn_id_t txn, const std::unordered_set<txn_id_
 // For efficiency consideration, return and abort the youngest transaction.
 bool LockManager::HasCycle(txn_id_t *txn_id) {
   txn_id_t txn1, txn2;  // two inter-dependent transactions
-  std::unique_lock<std::mutex> lck(waits_for_latch_);
   for (const auto& wait_txn_vec : waits_for_) {
     txn_id_t cur_txn = wait_txn_vec.first;
     bool cycle_detected = CycleDetectImpl(cur_txn, {} /* visited */, &txn1, &txn2);
@@ -207,13 +204,76 @@ std::vector<std::pair<txn_id_t, txn_id_t>> LockManager::GetEdgeList() {
   return waits_for_pair;
 }
 
+std::unordered_map<txn_id_t, std::vector<std::pair<RID, bool>>> LockManager::ReconstructWaitForGraph() {
+  waits_for_.clear();
+  std::unordered_map<txn_id_t, std::vector<std::pair<RID, bool>>> txns;
+
+  for (const auto& rid_request_queue : lock_table_) {
+    const RID& rid = rid_request_queue.first;
+    const LockRequestQueue& lock_request_queue = rid_request_queue.second;
+    std::vector<std::pair<txn_id_t, LockMode>> granted_txns;
+    std::vector<std::pair<txn_id_t, LockMode>> waiting_txns;
+    for (const LockRequest& lock_request : lock_request_queue.request_queue_) {
+      if (lock_request.granted_) {
+        granted_txns.emplace_back(lock_request.txn_id_, lock_request.lock_mode_);
+      } else {
+        waiting_txns.emplace_back(lock_request.txn_id_, lock_request.lock_mode_);
+      }
+    }
+
+    // Assert lock granting validility.
+    assert(!granted_txns.empty());
+    if (granted_txns.size() == 1 && granted_txns[0].second == LockMode::EXCLUSIVE) {
+      // nothing to assert
+    } else if (granted_txns.size() == 1 && granted_txns[0].second == LockMode::SHARED) {
+      if (!waiting_txns.empty()) {
+        for (const auto& txn_id_lock_mode : waiting_txns) {
+          LockMode lock_mode = txn_id_lock_mode.second;
+          assert(lock_mode != LockMode::SHARED);
+        }
+      }
+    } else {
+      for (const auto& txn_id_lock_mode : granted_txns) {
+        LockMode lock_mode = txn_id_lock_mode.second;
+        assert(lock_mode == LockMode::SHARED);
+      }
+      if (!waiting_txns.empty()) {
+        for (const auto& txn_id_lock_mode : waiting_txns) {
+          LockMode lock_mode = txn_id_lock_mode.second;
+          assert(lock_mode != LockMode::SHARED);
+        }
+      }
+    }
+
+    // (1) Add all transactions into maps, used when aborting transactions.
+    // (2) Add dependent transaction pairs into wait-for graph.
+    for (const auto& granted_pair : granted_txns) {
+      for (const auto& waiting_pair : waiting_txns) {
+        txn_id_t cur_granted_txn = granted_pair.first;
+        txn_id_t cur_waiting_txn = waiting_pair.first;
+        AddEdge(cur_granted_txn, cur_waiting_txn);
+
+        txns[cur_granted_txn].emplace_back(rid, HOLDING);
+        txns[cur_waiting_txn].emplace_back(rid, WAITING);
+      }
+    }
+  }
+  return txns;
+}
+
+// (1) Iterate lock_table_, and reconstruct wait_for_ graph via AddEdge() and RemoveEdge() method.
+// (2) Perform deadlock detection via HasCycle() method.
+// (3) Abort younger transaction, check whether the released lock can be granted to other transactions.
 void LockManager::RunCycleDetection() {
   while (enable_cycle_detection_) {
     std::this_thread::sleep_for(cycle_detection_interval);
     {
-      std::unique_lock<std::mutex> l(latch_);
-      // TODO(student): remove the continue and add your cycle detection and abort code here
-      continue;
+      std::unique_lock<std::mutex> lck(latch_);
+      auto txns = ReconstructWaitForGraph();
+      txn_id_t txn_id;
+      if (HasCycle(&txn_id)) {
+
+      }
     }
   }
 }

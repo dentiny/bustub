@@ -204,7 +204,14 @@ class LockManager {
   // Util for all lock methods.
   bool LockImpl(Transaction *txn, const RID &rid, LockMode lock_mode, bool is_upgrade);
 
+  // Construct wait-for graph on the fly everytime RunCycleDetection() launches.
+  // map: <txn, all RID waiting or holding>, true for holding, false for waiting
+  std::unordered_map<txn_id_t, std::vector<std::pair<RID, bool>>> ReconstructWaitForGraph();
+
  private:
+  static constexpr bool HOLDING = true;
+  static constexpr bool WAITING = false;
+
   std::mutex latch_;  // mutex at lock_table granularity
   std::mutex waits_for_latch_;  // mutex for waits_for_
   std::atomic<bool> enable_cycle_detection_;
