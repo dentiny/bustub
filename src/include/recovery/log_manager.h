@@ -28,8 +28,9 @@ namespace bustub {
  */
 class LogManager {
  public:
-  explicit LogManager(DiskManager *disk_manager)
-      : next_lsn_(0), persistent_lsn_(INVALID_LSN), disk_manager_(disk_manager) {
+  explicit LogManager(DiskManager *disk_manager) :
+    next_lsn_(0), persistent_lsn_(INVALID_LSN), cur_lsn_{INVALID_LSN}, log_buffer_size_{0}, flush_buffer_size_{0},
+      disk_manager_(disk_manager) {
     log_buffer_ = new char[LOG_BUFFER_SIZE];
     flush_buffer_ = new char[LOG_BUFFER_SIZE];
   }
@@ -52,23 +53,33 @@ class LogManager {
   inline char *GetLogBuffer() { return log_buffer_; }
 
  private:
-  // TODO(students): you may add your own member variables
+  // Invoked within StopFlushThread() method to flush.
+  void Flush();
 
+ private:
   /** The atomic counter which records the next log sequence number. */
   std::atomic<lsn_t> next_lsn_;
   /** The log records before and including the persistent lsn have been written to disk. */
   std::atomic<lsn_t> persistent_lsn_;
+  /** The log records updated by AppendLogRecord(), assigned to persistent_lsn_ when flush. */
+  std::atomic<lsn_t> cur_lsn_;
+
+  int log_buffer_size_;
+  int flush_buffer_size_;
 
   char *log_buffer_;
   char *flush_buffer_;
 
-  std::mutex latch_;
-
-  std::thread *flush_thread_ __attribute__((__unused__));
-
-  std::condition_variable cv_;
-
   DiskManager *disk_manager_ __attribute__((__unused__));
+
+  std::mutex latch_;
+  std::condition_variable flush_cv_;
+  std::condition_variable append_cv_;
+  std::future<void> flush_future_;
+  // std::thread *flush_thread_ __attribute__((__unused__));
+
+  // Set true by AppendLogRecord() method.
+  std::atomic<bool> request_flush_;
 };
 
 }  // namespace bustub
