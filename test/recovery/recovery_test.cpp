@@ -459,7 +459,7 @@ TEST(RecoveryTest, UndoTest) {
 }
 
 // NOLINTNEXTLINE
-TEST(RecoveryTest, DISABLED_CheckpointTest) {
+TEST(RecoveryTest, CheckpointTest) {
   remove("test.db");
   remove("test.log");
   BustubInstance *bustub_instance = new BustubInstance("test.db");

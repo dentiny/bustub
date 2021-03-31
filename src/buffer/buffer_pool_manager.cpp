@@ -257,6 +257,7 @@ void BufferPoolManager::FlushAllPagesImpl() {
         log_manager_->Flush(true /* is_forced */);
       }
       disk_manager_->WritePage(page->GetPageId(), page->GetData());
+      page->is_dirty_ = false;
     }
   }
 }
