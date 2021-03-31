@@ -27,7 +27,7 @@
 namespace bustub {
 
 // NOLINTNEXTLINE
-TEST(RecoveryTest, RedoTest) {
+TEST(RecoveryTest, DISABLED_RedoTest) {
   remove("test.db");
   remove("test.log");
 

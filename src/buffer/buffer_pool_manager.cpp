@@ -10,6 +10,14 @@
 //
 //===----------------------------------------------------------------------===//
 
+/*
+ * Notes on log flushing:
+ * Before your buffer pool manager evicts a dirty page from the clock replacer and writes this page back to the disk,
+ * it needs to flush all logs up to pageLSN. You need to compare persistent_lsn_ (a member variable in LogManager)
+ * with your pageLSN. However, unlike with group commit, the buffer pool can force the log manager to flush the log
+ * buffer (but still needs to wait for the logs to be stored before continuing).
+ */
+
 #include "buffer/buffer_pool_manager.h"
 
 #include <cassert>
@@ -88,6 +96,9 @@ Page *BufferPoolManager::FetchPageImpl(page_id_t page_id) {
     page_table_[page_id] = victim_frame_id;
     replacer_->Pin(victim_frame_id);
     if (page->IsDirty()) {
+      if (enable_logging && log_manager_->GetPersistentLSN() < page->GetLSN()) {
+        log_manager_->Flush();
+      }
       disk_manager_->WritePage(page->page_id_, page->data_);
     }
 
@@ -139,6 +150,9 @@ bool BufferPoolManager::FlushPageImpl(page_id_t page_id) {
   frame_id_t frame_idx = it->second;
   Page *page = pages_ + frame_idx;
   if (page->IsDirty()) {
+    if (enable_logging && log_manager_->GetPersistentLSN() < page->GetLSN()) {
+      log_manager_->Flush();
+    }
     disk_manager_->WritePage(page_id, page->GetData());
     page->is_dirty_ = false;
   }
@@ -176,6 +190,9 @@ Page *BufferPoolManager::NewPageImpl(page_id_t *page_id) {
     Page *page = pages_ + victim_idx;
     page_id_t victim_page_id = page->GetPageId();
     if (page->IsDirty()) {
+      if (enable_logging && log_manager_->GetPersistentLSN() < page->GetLSN()) {
+        log_manager_->Flush();
+      }
       disk_manager_->WritePage(page->GetPageId(), page->GetData());
     }
     page->ResetMemory();
@@ -217,6 +234,9 @@ bool BufferPoolManager::DeletePageImpl(page_id_t page_id) {
 
   assert(page->pin_count_ == 0);
   if (page->IsDirty()) {
+    if (enable_logging && log_manager_->GetPersistentLSN() < page->GetLSN()) {
+      log_manager_->Flush();
+    }
     disk_manager_->WritePage(page->GetPageId(), page->GetData());
   }
   page_table_.erase(page_id);
@@ -234,6 +254,9 @@ void BufferPoolManager::FlushAllPagesImpl() {
   for (size_t ii = 0; ii < pool_size_; ++ii) {
     Page *page = pages_ + ii;
     if (page->IsDirty()) {
+      if (enable_logging && log_manager_->GetPersistentLSN() < page->GetLSN()) {
+        log_manager_->Flush();
+      }
       disk_manager_->WritePage(page->GetPageId(), page->GetData());
     }
   }

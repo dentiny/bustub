@@ -42,6 +42,7 @@ class LogManager {
     flush_buffer_ = nullptr;
   }
 
+  void Flush();  // Invoked within StopFlushThread() and BufferPoolManager.
   void RunFlushThread();
   void StopFlushThread();
 
@@ -51,10 +52,6 @@ class LogManager {
   inline lsn_t GetPersistentLSN() { return persistent_lsn_; }
   inline void SetPersistentLSN(lsn_t lsn) { persistent_lsn_ = lsn; }
   inline char *GetLogBuffer() { return log_buffer_; }
-
- private:
-  // Invoked within StopFlushThread() method to flush.
-  void Flush();
 
  private:
   /** The atomic counter which records the next log sequence number. */
