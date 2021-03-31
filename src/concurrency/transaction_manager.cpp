@@ -18,6 +18,15 @@
 #include "catalog/catalog.h"
 #include "storage/table/table_heap.h"
 
+/*
+ * Notes on logging:
+ * (1) AppendLogRecord on Begin, Commit, and Abort.
+ * (2) Within TransactionManager, whenever you call the Commit or Abort method, you need to make 
+ * sure your log records are permanently stored on disk file before releasing the locks. But instead
+ * of forcing a flush, you need to wait for log_timeout or other operations to implicitly trigger
+ * the flush operations. => apply group commit
+ */ 
+
 namespace bustub {
 
 std::unordered_map<txn_id_t, Transaction *> TransactionManager::txn_map = {};
@@ -29,8 +38,15 @@ Transaction *TransactionManager::Begin(Transaction *txn, IsolationLevel isolatio
   if (txn == nullptr) {
     txn = new Transaction(next_txn_id_++, isolation_level);
   }
-
   txn_map[txn->GetTransactionId()] = txn;
+
+  // Begin transaction logging.
+  if (enable_logging) {
+    assert(txn->GetPrevLSN() == INVALID_LSN);
+    LogRecord log_record(txn->GetTransactionId(), txn->GetPrevLSN(), LogRecordType::BEGIN);
+    txn->SetPrevLSN(log_manager_->AppendLogRecord(&log_record));
+  }
+
   return txn;
 }
 
@@ -49,6 +65,12 @@ void TransactionManager::Commit(Transaction *txn) {
     write_set->pop_back();
   }
   write_set->clear();
+
+  if (enable_logging) {
+    LogRecord log_record(txn->GetTransactionId(), txn->GetPrevLSN(), LogRecordType::COMMIT);
+    txn->SetPrevLSN(log_manager_->AppendLogRecord(&log_record));
+    log_manager_->Flush(false /* is_forced */);
+  }
 
   // Release all the locks.
   ReleaseLocks(txn);
@@ -99,6 +121,12 @@ void TransactionManager::Abort(Transaction *txn) {
   }
   table_write_set->clear();
   index_write_set->clear();
+
+  if (enable_logging) {
+    LogRecord log_record(txn->GetTransactionId(), txn->GetPrevLSN(), LogRecordType::ABORT);
+    txn->SetPrevLSN(log_manager_->AppendLogRecord(&log_record));
+    log_manager_->Flush(false /* is_forced */);
+  }
 
   // Release all the locks.
   ReleaseLocks(txn);

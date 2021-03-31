@@ -11,6 +11,7 @@
 //===----------------------------------------------------------------------===//
 
 #include <cassert>
+#include <iostream>
 
 #include "recovery/log_manager.h"
 
@@ -54,17 +55,29 @@ void LogManager::StopFlushThread() {
   if (!enable_logging) {
     return;
   }
-  Flush();
-  flush_future_.get();
+  std::cout << "LogManager has started stopping flush thread" << std::endl;
+  Flush(true);
   enable_logging = false;
+  flush_future_.get();
   assert(log_buffer_size_ == 0);
   assert(flush_buffer_size_ == 0);
+
+  std::cout << "LogManager has stopped flush thread" << std::endl;
+
 }
 
-void LogManager::Flush() {
+// @param: true for group commit
+// For force commit, awaken flush thread to flush log records immediately
+// For group commit, block until log_timeout or other operations triggers flush
+void LogManager::Flush(bool is_forced) {
   std::unique_lock<std::mutex> lck(latch_);
-  request_flush_ = true;
-  flush_cv_.notify_one();
+  if (is_forced) {
+    request_flush_ = true;
+    flush_cv_.notify_one();
+    append_cv_.wait(lck, [&]() { return !request_flush_; });  // block until flush completes
+  } else {
+    append_cv_.wait(lck);
+  }
 }
 
 /*

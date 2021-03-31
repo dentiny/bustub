@@ -20,11 +20,264 @@
 #include "gtest/gtest.h"
 #include "logging/common.h"
 #include "recovery/log_recovery.h"
+#include "storage/b_plus_tree_test_util.h"
 #include "storage/table/table_heap.h"
 #include "storage/table/table_iterator.h"
 #include "storage/table/tuple.h"
 
 namespace bustub {
+
+TEST(LogManagerTest, BasicLogging) {
+  BustubInstance *bustub_instance = new BustubInstance("test.db");
+
+  EXPECT_FALSE(enable_logging);
+  LOG_DEBUG("Skip system recovering...");
+
+  bustub_instance->log_manager_->RunFlushThread();
+  EXPECT_TRUE(enable_logging);
+  LOG_DEBUG("System logging thread running...");
+
+  LOG_DEBUG("Create a test table");
+  Transaction *txn = bustub_instance->transaction_manager_->Begin();
+  TableHeap *test_table = new TableHeap(bustub_instance->buffer_pool_manager_,
+                                        bustub_instance->lock_manager_,
+                                        bustub_instance->log_manager_, txn);
+  LOG_DEBUG("Insert and delete a random tuple");
+
+  std::string createStmt = "a bigint";
+  Schema *schema = ParseCreateStatement(createStmt);
+  RID rid;
+  Tuple tuple = ConstructTuple(schema);
+  EXPECT_TRUE(test_table->InsertTuple(tuple, &rid, txn));
+  EXPECT_TRUE(test_table->MarkDelete(rid, txn));
+  bustub_instance->transaction_manager_->Commit(txn);
+  // LOG_DEBUG("Commit txn");
+
+  bustub_instance->log_manager_->StopFlushThread();
+  EXPECT_FALSE(enable_logging);
+  // LOG_DEBUG("Turning off flushing thread");
+
+  // some basic manually checking here
+  char buffer[PAGE_SIZE];
+  bustub_instance->disk_manager_->ReadLog(buffer, PAGE_SIZE, 0);
+  // int32_t size = *reinterpret_cast<int32_t *>(buffer);
+  // LOG_DEBUG("size  = %d", size);
+  // size = *reinterpret_cast<int32_t *>(buffer + 20);
+  // LOG_DEBUG("size  = %d", size);
+  // size = *reinterpret_cast<int32_t *>(buffer + 48);
+  // LOG_DEBUG("size  = %d", size);
+
+  delete txn;
+  delete bustub_instance;
+  delete test_table;
+  delete schema;
+  // LOG_DEBUG("Teared down the system");
+  remove("test.db");
+  remove("test.log");
+}
+
+void StartTransaction(BustubInstance *bustub_instance, TableHeap *test_table)
+{
+  // LOG_DEBUG("Create a test table");
+  Transaction *txn = bustub_instance->transaction_manager_->Begin();
+  // LOG_DEBUG("Insert and delete a random tuple");
+
+  std::string createStmt = "a bigint";
+  Schema *schema = ParseCreateStatement(createStmt);
+  RID rid;
+  Tuple tuple = ConstructTuple(schema);
+  EXPECT_TRUE(test_table->InsertTuple(tuple, &rid, txn));
+  EXPECT_TRUE(test_table->MarkDelete(rid, txn));
+  // LOG_DEBUG("Commit txn %d", txn->GetTransactionId());
+  bustub_instance->transaction_manager_->Commit(txn);
+  delete txn;
+  delete schema;
+}
+
+void StartTransaction1(BustubInstance *bustub_instance, TableHeap *test_table)
+{
+  // LOG_DEBUG("Create a test table");
+  Transaction *txn = bustub_instance->transaction_manager_->Begin();
+  // LOG_DEBUG("Insert and delete a random tuple");
+
+  for (int i = 0; i < 10; i++)
+  {
+    std::string createStmt = "a bigint";
+    Schema *schema = ParseCreateStatement(createStmt);
+    RID rid;
+    Tuple tuple = ConstructTuple(schema);
+    EXPECT_TRUE(test_table->InsertTuple(tuple, &rid, txn));
+    delete schema;
+  }
+  // LOG_DEBUG("Commit txn %d", txn->GetTransactionId());
+  bustub_instance->transaction_manager_->Commit(txn);
+  delete txn;
+}
+
+
+TEST(LogManagerTest, LoggingWithGroupCommit) {
+  BustubInstance *bustub_instance = new BustubInstance("test.db");
+  EXPECT_FALSE(enable_logging);
+  // LOG_DEBUG("Skip system recovering...");
+
+  bustub_instance->log_manager_->RunFlushThread();
+  EXPECT_TRUE(enable_logging);
+  // LOG_DEBUG("System logging thread running...");
+
+  // LOG_DEBUG("Create a test table");
+  Transaction *txn = bustub_instance->transaction_manager_->Begin();
+  TableHeap *test_table = new TableHeap(bustub_instance->buffer_pool_manager_,
+                                        bustub_instance->lock_manager_,
+                                        bustub_instance->log_manager_, txn);
+  // LOG_DEBUG("Insert and delete a random tuple");
+
+  std::string createStmt = "a bigint";
+  Schema *schema = ParseCreateStatement(createStmt);
+  RID rid;
+  Tuple tuple = ConstructTuple(schema);
+  EXPECT_TRUE(test_table->InsertTuple(tuple, &rid, txn));
+  EXPECT_TRUE(test_table->MarkDelete(rid, txn));
+  LOG_DEBUG("Commit txn %d", txn->GetTransactionId());
+  bustub_instance->transaction_manager_->Commit(txn);
+  delete txn;
+
+  std::future<void> fut1 = std::async(std::launch::async, StartTransaction, bustub_instance, test_table);
+  std::future<void> fut2 = std::async(std::launch::async, StartTransaction, bustub_instance, test_table);
+  std::future<void> fut3 = std::async(std::launch::async, StartTransaction, bustub_instance, test_table);
+
+  fut1.get();
+  fut2.get();
+  fut3.get();
+
+  bustub_instance->log_manager_->StopFlushThread();
+  EXPECT_FALSE(enable_logging);
+  // LOG_DEBUG("Turning off flushing thread");
+
+  // some basic manually checking here
+  char buffer[PAGE_SIZE];
+  bustub_instance->disk_manager_->ReadLog(buffer, PAGE_SIZE, 0);
+  // int32_t size = *reinterpret_cast<int32_t *>(buffer);
+  // LOG_DEBUG("size  = %d", size);
+  // size = *reinterpret_cast<int32_t *>(buffer + 20);
+  // LOG_DEBUG("size  = %d", size);
+  // size = *reinterpret_cast<int32_t *>(buffer + 48);
+  // LOG_DEBUG("size  = %d", size);
+
+  delete bustub_instance;
+  delete test_table;
+  delete schema;
+  // LOG_DEBUG("Teared down the system");
+  remove("test.db");
+  remove("test.log");
+}
+
+TEST(LogManagerTest, SingleLoggingWithBufferFull) {
+  BustubInstance *bustub_instance = new BustubInstance("test.db");
+  EXPECT_FALSE(enable_logging);
+  // LOG_DEBUG("Skip system recovering...");
+
+  bustub_instance->log_manager_->RunFlushThread();
+  EXPECT_TRUE(enable_logging);
+  // LOG_DEBUG("System logging thread running...");
+
+  // LOG_DEBUG("Create a test table");
+  Transaction *txn = bustub_instance->transaction_manager_->Begin();
+  TableHeap *test_table = new TableHeap(bustub_instance->buffer_pool_manager_,
+                                        bustub_instance->lock_manager_,
+                                        bustub_instance->log_manager_, txn);
+  // LOG_DEBUG("Insert and delete a random tuple");
+
+  for (int i = 0; i < 13; i++)
+  {
+    std::string createStmt = "a bigint";
+    Schema *schema = ParseCreateStatement(createStmt);
+    RID rid;
+    Tuple tuple = ConstructTuple(schema);
+    EXPECT_TRUE(test_table->InsertTuple(tuple, &rid, txn));
+    delete schema;
+  }
+  LOG_DEBUG("Commit txn %d", txn->GetTransactionId());
+  bustub_instance->transaction_manager_->Commit(txn);
+  delete txn;
+
+  bustub_instance->log_manager_->StopFlushThread();
+  EXPECT_FALSE(enable_logging);
+  // LOG_DEBUG("Turning off flushing thread");
+  // LOG_DEBUG("num of flushes = %d", bustub_instance->disk_manager_->GetNumFlushes());
+
+  // some basic manually checking here
+  char buffer[PAGE_SIZE];
+  bustub_instance->disk_manager_->ReadLog(buffer, PAGE_SIZE, 0);
+  // int32_t size = *reinterpret_cast<int32_t *>(buffer);
+  // LOG_DEBUG("size  = %d", size);
+  // size = *reinterpret_cast<int32_t *>(buffer + 20);
+  // LOG_DEBUG("size  = %d", size);
+  // size = *reinterpret_cast<int32_t *>(buffer + 48);
+  // LOG_DEBUG("size  = %d", size);
+
+  delete test_table;
+  delete bustub_instance;
+  // LOG_DEBUG("Teared down the system");
+  remove("test.db");
+  remove("test.log");
+}
+
+TEST(LogManagerTest, MultiLoggingWithBufferFull) {
+  BustubInstance *bustub_instance = new BustubInstance("test.db");
+  EXPECT_FALSE(enable_logging);
+  // LOG_DEBUG("Skip system recovering...");
+
+  bustub_instance->log_manager_->RunFlushThread();
+  EXPECT_TRUE(enable_logging);
+  // LOG_DEBUG("System logging thread running...");
+
+  // LOG_DEBUG("Create a test table");
+  Transaction *txn = bustub_instance->transaction_manager_->Begin();
+  TableHeap *test_table = new TableHeap(bustub_instance->buffer_pool_manager_,
+                                        bustub_instance->lock_manager_,
+                                        bustub_instance->log_manager_, txn);
+  // LOG_DEBUG("Insert and delete a random tuple");
+
+  for (int i = 0; i < 13; i++)
+  {
+    std::string createStmt = "a bigint";
+    Schema *schema = ParseCreateStatement(createStmt);
+    RID rid;
+    Tuple tuple = ConstructTuple(schema);
+    EXPECT_TRUE(test_table->InsertTuple(tuple, &rid, txn));
+    delete schema;
+  }
+  // LOG_DEBUG("Commit txn %d", txn->GetTransactionId());
+  bustub_instance->transaction_manager_->Commit(txn);
+  delete txn;
+
+  std::future<void> fut1 = std::async(std::launch::async, StartTransaction1, bustub_instance, test_table);
+  std::future<void> fut2 = std::async(std::launch::async, StartTransaction1, bustub_instance, test_table);
+
+  fut1.get();
+  fut2.get();
+
+  bustub_instance->log_manager_->StopFlushThread();
+  EXPECT_FALSE(enable_logging);
+  // LOG_DEBUG("Turning off flushing thread");
+
+  // LOG_DEBUG("num of flushes = %d", bustub_instance->disk_manager_->GetNumFlushes());
+  // some basic manually checking here
+  char buffer[PAGE_SIZE];
+  bustub_instance->disk_manager_->ReadLog(buffer, PAGE_SIZE, 0);
+  // int32_t size = *reinterpret_cast<int32_t *>(buffer);
+  // LOG_DEBUG("size  = %d", size);
+  // size = *reinterpret_cast<int32_t *>(buffer + 20);
+  // LOG_DEBUG("size  = %d", size);
+  // size = *reinterpret_cast<int32_t *>(buffer + 48);
+  // LOG_DEBUG("size  = %d", size);
+
+  delete test_table;
+  delete bustub_instance;
+  // LOG_DEBUG("Teared down the system");
+  remove("test.db");
+  remove("test.log");
+}
 
 // NOLINTNEXTLINE
 TEST(RecoveryTest, DISABLED_RedoTest) {

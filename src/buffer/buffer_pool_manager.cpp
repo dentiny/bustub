@@ -97,7 +97,7 @@ Page *BufferPoolManager::FetchPageImpl(page_id_t page_id) {
     replacer_->Pin(victim_frame_id);
     if (page->IsDirty()) {
       if (enable_logging && log_manager_->GetPersistentLSN() < page->GetLSN()) {
-        log_manager_->Flush();
+        log_manager_->Flush(true /* is_forced */);
       }
       disk_manager_->WritePage(page->page_id_, page->data_);
     }
@@ -151,7 +151,7 @@ bool BufferPoolManager::FlushPageImpl(page_id_t page_id) {
   Page *page = pages_ + frame_idx;
   if (page->IsDirty()) {
     if (enable_logging && log_manager_->GetPersistentLSN() < page->GetLSN()) {
-      log_manager_->Flush();
+      log_manager_->Flush(true /* is_forced */);
     }
     disk_manager_->WritePage(page_id, page->GetData());
     page->is_dirty_ = false;
@@ -191,7 +191,7 @@ Page *BufferPoolManager::NewPageImpl(page_id_t *page_id) {
     page_id_t victim_page_id = page->GetPageId();
     if (page->IsDirty()) {
       if (enable_logging && log_manager_->GetPersistentLSN() < page->GetLSN()) {
-        log_manager_->Flush();
+        log_manager_->Flush(true /* is_forced */);
       }
       disk_manager_->WritePage(page->GetPageId(), page->GetData());
     }
@@ -235,7 +235,7 @@ bool BufferPoolManager::DeletePageImpl(page_id_t page_id) {
   assert(page->pin_count_ == 0);
   if (page->IsDirty()) {
     if (enable_logging && log_manager_->GetPersistentLSN() < page->GetLSN()) {
-      log_manager_->Flush();
+      log_manager_->Flush(true /* is_forced */);
     }
     disk_manager_->WritePage(page->GetPageId(), page->GetData());
   }
@@ -255,7 +255,7 @@ void BufferPoolManager::FlushAllPagesImpl() {
     Page *page = pages_ + ii;
     if (page->IsDirty()) {
       if (enable_logging && log_manager_->GetPersistentLSN() < page->GetLSN()) {
-        log_manager_->Flush();
+        log_manager_->Flush(true /* is_forced */);
       }
       disk_manager_->WritePage(page->GetPageId(), page->GetData());
     }

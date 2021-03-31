@@ -42,7 +42,7 @@ class LogManager {
     flush_buffer_ = nullptr;
   }
 
-  void Flush();  // Invoked within StopFlushThread() and BufferPoolManager.
+  void Flush(bool is_forced);  // Invoked within StopFlushThread() and BufferPoolManager.
   void RunFlushThread();
   void StopFlushThread();
 

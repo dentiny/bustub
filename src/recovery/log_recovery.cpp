@@ -53,7 +53,7 @@ bool LogRecovery::DeserializeLogRecord(const char *data, LogRecord *log_record) 
     log_record->delete_rid_ = *reinterpret_cast<const RID *>(data);
     log_record->delete_tuple_.DeserializeFrom(data + sizeof(RID));
   } else {
-    assert(0);
+    BUSTUB_ASSERT(0, "Unknown log record type");
   }
 
   return true;
@@ -93,18 +93,21 @@ void LogRecovery::Redo() {
     while (DeserializeLogRecord(log_buffer_ + log_buffer_offset, &log_record)) {
       lsn_t log_lsn = log_record.GetLSN();
       int32_t log_size = log_record.GetSize();
+      txn_id_t log_txn_id = log_record.GetTxnId();
       LogRecordType log_type = log_record.GetLogRecordType();
       lsn_mapping_[log_lsn] = log_file_offset_ + log_buffer_offset;
       log_file_offset_ += LOG_BUFFER_SIZE - log_buffer_offset;
       log_buffer_offset += log_size;
       assert(log_type != LogRecordType::INVALID);
 
-      // Special operation: BEGIN, ABORT, COMMIT, NEWPAGE
       if (log_type == LogRecordType::BEGIN) {
+        active_txn_[log_txn_id] = log_lsn;
         continue;
-      } else if (log_type == LogRecordType::COMMIT || log_type == LogRecordType::ABORT) {
-        txn_id_t log_txn_id = log_record.GetTxnId();
-        assert(active_txn_.find(log_txn_id) != active_txn_.end());
+      } else {
+        BUSTUB_ASSERT(active_txn_.find(log_txn_id) != active_txn_.end(), "LogRecord have not BEGIN");
+      }
+      
+      if (log_type == LogRecordType::COMMIT || log_type == LogRecordType::ABORT) {
         active_txn_.erase(log_txn_id);
         continue;
       } else if (log_type == LogRecordType::NEWPAGE) {
@@ -156,7 +159,7 @@ void LogRecovery::Redo() {
         } else if (log_type == LogRecordType::ROLLBACKDELETE) {
           table_page->RollbackDelete(rid, nullptr, nullptr);
         } else {
-          assert(0);
+          BUSTUB_ASSERT(0, "Unknown log record type");
         }
         table_page->SetLSN(log_lsn);
       }
@@ -175,6 +178,68 @@ void LogRecovery::Redo() {
  */
 void LogRecovery::Undo() {
   assert(!enable_logging);
+  for (auto& txn_lsn_pair : active_txn_) {
+    lsn_t lsn = txn_lsn_pair.second;
+    if (lsn == INVALID_LSN) {  // TODO
+      continue;
+    }
+    LogRecord log_record;
+    assert(lsn_mapping_.find(lsn) != lsn_mapping_.end());
+    disk_manager_->ReadLog(log_buffer_, PAGE_SIZE, lsn_mapping_[lsn]);
+    assert(DeserializeLogRecord(log_buffer_, &log_record));
+
+    // lsn_t log_lsn = log_record.GetLSN();
+    // int32_t log_size = log_record.GetSize();
+    // txn_id_t log_txn_id = log_record.GetTxnId();
+    page_id_t cur_page_id = log_record.page_id_;
+    page_id_t prev_page_id = log_record.prev_page_id_;
+    LogRecordType log_type = log_record.GetLogRecordType();
+
+    if (log_type == LogRecordType::BEGIN) {
+      assert(prev_page_id == INVALID_LSN);
+      continue;
+    } else if (log_type == LogRecordType::COMMIT || log_type == LogRecordType::ABORT) {
+      BUSTUB_ASSERT(0, "Transaction should have been committed or aborted.");
+    } else if (log_type == LogRecordType::NEWPAGE) {
+      assert(buffer_pool_manager_->DeletePage(cur_page_id));
+      if (prev_page_id != INVALID_PAGE_ID) {
+        // Suppose we have page1 and page2. page1 has already been deleted due to undo, page2's prev page
+        // is not guarenteed to exist.
+        Page *page = buffer_pool_manager_->FetchPage(prev_page_id);
+        if (page != nullptr) {
+          TablePage *table_page = static_cast<TablePage *>(page);
+          table_page->SetNextPageId(INVALID_PAGE_ID);
+          buffer_pool_manager_->UnpinPage(prev_page_id, true /* is_dirty */);
+        }
+      }
+      continue;
+    }
+
+    RID rid = log_type == LogRecordType::UPDATE ? log_record.update_rid_ :
+              log_type == LogRecordType::INSERT ? log_record.insert_rid_ :
+              log_record.delete_rid_;
+    page_id_t page_id = rid.GetPageId();
+    Page *page = buffer_pool_manager_->FetchPage(page_id);
+    assert(page != nullptr);
+    TablePage *table_page = static_cast<TablePage *>(page);
+    // lsn_t page_lsn = table_page->GetLSN();
+    if (log_type == LogRecordType::UPDATE) {
+      Tuple tuple;  // placeholder
+      table_page->UpdateTuple(log_record.old_tuple_, &tuple, rid, nullptr, nullptr, nullptr);
+    } else if (log_type == LogRecordType::INSERT) {
+      table_page->ApplyDelete(rid, nullptr, nullptr);
+    } else if (log_type == LogRecordType::MARKDELETE) {
+      table_page->RollbackDelete(rid, nullptr, nullptr);
+    } else if (log_type == LogRecordType::APPLYDELETE) {
+      table_page->InsertTuple(log_record.delete_tuple_, &rid, nullptr, nullptr, nullptr);
+    } else if (log_type == LogRecordType::ROLLBACKDELETE) {
+      table_page->MarkDelete(rid, nullptr, nullptr, nullptr);
+    } else {
+      BUSTUB_ASSERT(0, "Unknown log record type");
+    }
+  }
+  active_txn_.clear();
+  lsn_mapping_.clear();
 }
 
 }  // namespace bustub
