@@ -67,47 +67,49 @@ bool LogRecovery::DeserializeLogRecord(const char *data, LogRecord *log_record) 
  * lsn_mapping_ table
  *
  * How to buffer log:
- * (1) load log from storage via disk manager, the log file offset is indicated by log_file_offset_
+ * (1) load log from storage via disk manager, the log file offset is indicated by log_file_offset
  * (2) deserialize and redo log record by record. Since log record could be partial, either due to 
  * incomplete logging, or log loading this time breaks the originally complete log record apart. 
  * Move the partial log record to the front of the log_buffer, and continue read from storage after
  * it next time. The buffer offset is indicated by log_buffer_offset.
  *
- * For different types for logging:
+ * For different types for logging redo:
  * (1) BEGIN: ignore
  * (2) ABORT/COMMIT: the redo will be completed elsewhere
  * (3) NEWPAGE: set current and prev table page's header
  * (4) UPDATE: table_page->UpdateTuple
  * (5) INSERT: table_page->InsertTuple
  * (6) MARKDELETE: table_page->MarkDelete
- * (7) APPLYDELETE: table_page->APPLYDELETE
- * (8) ROLLBACKDELETE: table_page->ROLLBACKDELETE
+ * (7) APPLYDELETE: table_page->ApplyDelete
+ * (8) ROLLBACKDELETE: table_page->RollbackDelete
+ *
+ * Three offset variables:
+ * (1) log_file_offset: offset of logging file, for DiskManager->ReadLog to begin reading
+ * (2) log_buffer_offset: data in front of log_buffer_offset is previously loaded partial log record
  */
 void LogRecovery::Redo() {
   assert(!enable_logging);
-  log_file_offset_ = 0;
+  int log_file_offset = 0;
   int log_buffer_offset = 0;  // data in front of log_buffer_offset is previously loaded partial log record
-  while (disk_manager_->ReadLog(log_buffer_ + log_buffer_offset, LOG_BUFFER_SIZE - log_buffer_offset, log_file_offset_)) {
-    LogRecord log_record;
+  while (disk_manager_->ReadLog(log_buffer_ + log_buffer_offset, LOG_BUFFER_SIZE - log_buffer_offset, log_file_offset)) {
+    int buffer_start = log_file_offset;
+    log_file_offset += LOG_BUFFER_SIZE - log_buffer_offset;
     log_buffer_offset = 0;
+    LogRecord log_record;
     while (DeserializeLogRecord(log_buffer_ + log_buffer_offset, &log_record)) {
+
       lsn_t log_lsn = log_record.GetLSN();
       int32_t log_size = log_record.GetSize();
       txn_id_t log_txn_id = log_record.GetTxnId();
       LogRecordType log_type = log_record.GetLogRecordType();
-      lsn_mapping_[log_lsn] = log_file_offset_ + log_buffer_offset;
-      log_file_offset_ += LOG_BUFFER_SIZE - log_buffer_offset;
+      active_txn_[log_txn_id] = log_lsn;
+      lsn_mapping_[log_lsn] = buffer_start + log_buffer_offset;
       log_buffer_offset += log_size;
       assert(log_type != LogRecordType::INVALID);
 
       if (log_type == LogRecordType::BEGIN) {
-        active_txn_[log_txn_id] = log_lsn;
         continue;
-      } else {
-        BUSTUB_ASSERT(active_txn_.find(log_txn_id) != active_txn_.end(), "LogRecord have not BEGIN");
-      }
-      
-      if (log_type == LogRecordType::COMMIT || log_type == LogRecordType::ABORT) {
+      } else if (log_type == LogRecordType::COMMIT || log_type == LogRecordType::ABORT) {
         active_txn_.erase(log_txn_id);
         continue;
       } else if (log_type == LogRecordType::NEWPAGE) {
@@ -167,7 +169,8 @@ void LogRecovery::Redo() {
     }
 
     // Move the partial log record to the front of the log_buffer.
-    memcpy(log_buffer_, log_buffer_ + log_buffer_offset, LOG_BUFFER_SIZE - log_buffer_offset);
+    // Note: memcpy() doesn't allow overlapping memory, memmove() does.
+    memmove(log_buffer_, log_buffer_ + log_buffer_offset, LOG_BUFFER_SIZE - log_buffer_offset);
     log_buffer_offset = LOG_BUFFER_SIZE - log_buffer_offset;
   }
 }
@@ -175,17 +178,25 @@ void LogRecovery::Redo() {
 /*
  * undo phase on TABLE PAGE level(table/table_page.h)
  * iterate through active txn map and undo each operation
+ *
+ * For different types for logging undo:
+ * (1) BEGIN: ignore
+ * (2) ABORT/COMMIT: Redo() method error
+ * (3) NEWPAGE: BufferPoolManager->DeletePage
+ * (4) UPDATE: TablePage->Update to recover old tuple
+ * (5) INSERT: TablePage->ApplyDelete
+ * (6) MARKDELETE: TablePage->RollbackDelete
+ * (7) APPLYDELETE: TablePage->InsertTuple
+ * (8) ROLLBACKDELETE: TablePage->MarkDelete
  */
 void LogRecovery::Undo() {
   assert(!enable_logging);
   for (auto& txn_lsn_pair : active_txn_) {
     lsn_t lsn = txn_lsn_pair.second;
-    if (lsn == INVALID_LSN) {  // TODO
-      continue;
-    }
+    assert(lsn != INVALID_LSN);
     LogRecord log_record;
     assert(lsn_mapping_.find(lsn) != lsn_mapping_.end());
-    disk_manager_->ReadLog(log_buffer_, PAGE_SIZE, lsn_mapping_[lsn]);
+    disk_manager_->ReadLog(log_buffer_, LOG_BUFFER_SIZE, lsn_mapping_[lsn]);
     assert(DeserializeLogRecord(log_buffer_, &log_record));
 
     // lsn_t log_lsn = log_record.GetLSN();

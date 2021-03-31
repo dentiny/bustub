@@ -21,6 +21,7 @@
 #include "buffer/buffer_pool_manager.h"
 
 #include <cassert>
+#include <iostream>
 #include <list>
 #include <unordered_map>
 
@@ -128,9 +129,7 @@ bool BufferPoolManager::UnpinPageImpl(page_id_t page_id, bool is_dirty) {
   }
   frame_id_t frame_idx = it->second;
   Page *page = pages_ + frame_idx;
-  if (is_dirty) {
-    disk_manager_->WritePage(page->GetPageId(), page->GetData());
-  }
+  page->is_dirty_ |= is_dirty;
   if (page->GetPinCount() == 0) {
     return true;  // the unpinned page is not pinned
   }

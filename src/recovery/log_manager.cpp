@@ -55,15 +55,11 @@ void LogManager::StopFlushThread() {
   if (!enable_logging) {
     return;
   }
-  std::cout << "LogManager has started stopping flush thread" << std::endl;
-  Flush(true);
+  Flush(true /* is_forced */);
   enable_logging = false;
   flush_future_.get();
   assert(log_buffer_size_ == 0);
   assert(flush_buffer_size_ == 0);
-
-  std::cout << "LogManager has stopped flush thread" << std::endl;
-
 }
 
 // @param: true for group commit
@@ -113,23 +109,23 @@ lsn_t LogManager::AppendLogRecord(LogRecord *log_record) {
   memcpy(log_buffer_ + log_buffer_size_, log_record, LogRecord::HEADER_SIZE);
   int offset = log_buffer_size_ + LogRecord::HEADER_SIZE;  // offset of log_buffer_ to write into
 
-  if (log_record->log_record_type_ == LogRecordType::INSERT) {
+  LogRecordType log_type = log_record->log_record_type_;
+  if (log_type == LogRecordType::INSERT) {
     memcpy(log_buffer_ + offset, &log_record->insert_rid_, sizeof(RID));
     offset += sizeof(RID);
     log_record->insert_tuple_.SerializeTo(log_buffer_ + offset);
-  } else if (log_record->log_record_type_ == LogRecordType::MARKDELETE ||
-             log_record->log_record_type_ == LogRecordType::APPLYDELETE ||
-             log_record->log_record_type_ == LogRecordType::ROLLBACKDELETE) {
+  } else if (log_type == LogRecordType::MARKDELETE || log_type == LogRecordType::APPLYDELETE ||
+             log_type == LogRecordType::ROLLBACKDELETE) {
     memcpy(log_buffer_ + offset, &log_record->delete_rid_, sizeof(RID));
     offset += sizeof(RID);
     log_record->delete_tuple_.SerializeTo(log_buffer_ + offset);
-  } else if (log_record->log_record_type_ == LogRecordType::UPDATE) {
+  } else if (log_type == LogRecordType::UPDATE) {
     memcpy(log_buffer_ + offset, &log_record->update_rid_, sizeof(RID));
     offset += sizeof(RID);
     log_record->old_tuple_.SerializeTo(log_buffer_ + offset);
     offset += log_record->old_tuple_.GetLength() + sizeof(int32_t);
     log_record->new_tuple_.SerializeTo(log_buffer_ + offset);
-  } else if (log_record->log_record_type_ == LogRecordType::NEWPAGE) {
+  } else if (log_type == LogRecordType::NEWPAGE) {
     memcpy(log_buffer_ + offset, &log_record->prev_page_id_, sizeof(page_id_t));
     offset += sizeof(page_id_t);
     memcpy(log_buffer_ + offset, &log_record->page_id_, sizeof(page_id_t));

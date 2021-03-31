@@ -11,6 +11,7 @@
 //===----------------------------------------------------------------------===//
 
 #include <cassert>
+#include <iostream>
 
 #include "common/logger.h"
 #include "storage/table/table_heap.h"
