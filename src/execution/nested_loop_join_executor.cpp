@@ -18,12 +18,12 @@ namespace bustub {
 
 NestedLoopJoinExecutor::NestedLoopJoinExecutor(ExecutorContext *exec_ctx, const NestedLoopJoinPlanNode *plan,
                                                std::unique_ptr<AbstractExecutor> &&left_executor,
-                                               std::unique_ptr<AbstractExecutor> &&right_executor) :
-  AbstractExecutor(exec_ctx),
-  plan_(plan),
-  predicate_(plan_->Predicate()),
-  left_executor_(std::move(left_executor)),
-  right_executor_(std::move(right_executor)) {}
+                                               std::unique_ptr<AbstractExecutor> &&right_executor)
+    : AbstractExecutor(exec_ctx),
+      plan_(plan),
+      predicate_(plan_->Predicate()),
+      left_executor_(std::move(left_executor)),
+      right_executor_(std::move(right_executor)) {}
 
 void NestedLoopJoinExecutor::Init() {
   assert(left_executor_ != nullptr);
@@ -42,8 +42,8 @@ bool NestedLoopJoinExecutor::Next(Tuple *tuple, RID *rid) {
   Tuple right_tuple;
   if (left_executor_->Next(&left_tuple, rid) && right_executor_->Next(&right_tuple, rid)) {
     if (predicate_ == nullptr ||
-          predicate_->EvaluateJoin(&left_tuple, left_schema, &right_tuple, right_schema).GetAs<bool>()) {
-      const auto& columns = out_schema->GetColumns();
+        predicate_->EvaluateJoin(&left_tuple, left_schema, &right_tuple, right_schema).GetAs<bool>()) {
+      const auto &columns = out_schema->GetColumns();
       for (uint32_t ii = 0; ii < column_number; ++ii) {
         values[ii] = columns[ii].GetExpr()->EvaluateJoin(&left_tuple, left_schema, &right_tuple, right_schema);
       }

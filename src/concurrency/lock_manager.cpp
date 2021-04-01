@@ -10,12 +10,12 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "concurrency/lock_manager.h"
-#include "concurrency/transaction_manager.h"
-
 #include <iostream>
 #include <utility>
 #include <vector>
+
+#include "concurrency/lock_manager.h"
+#include "concurrency/transaction_manager.h"
 
 namespace bustub {
 
@@ -44,7 +44,7 @@ bool LockManager::LockImpl(Transaction *txn, const RID &rid, LockMode lock_mode,
 
   // Acquire lock on RID granularity.
   std::unique_lock<std::mutex> lock_table_latch(latch_);
-  LockRequestQueue& lock_request_queue = lock_table_[rid];
+  LockRequestQueue &lock_request_queue = lock_table_[rid];
   std::unique_lock<std::mutex> request_queue_lock(lock_request_queue.latch_);
   lock_table_latch.unlock();
 
@@ -73,12 +73,13 @@ bool LockManager::Unlock(Transaction *txn, const RID &rid) {
   if (lock_table_.find(rid) == lock_table_.end()) {
     return false;
   }
-  LockRequestQueue& lock_request_queue = lock_table_[rid];
-  std::list<LockRequest>& request_queue = lock_request_queue.request_queue_;
+  LockRequestQueue &lock_request_queue = lock_table_[rid];
+  std::list<LockRequest> &request_queue = lock_request_queue.request_queue_;
   std::unique_lock<std::mutex> request_queue_lock(lock_request_queue.latch_);
 
-  auto it = std::find_if(request_queue.begin(), request_queue.end(),
-    [txn](const LockRequest& lock_request) { return txn->GetTransactionId() == lock_request.txn_id_; });
+  auto it = std::find_if(request_queue.begin(), request_queue.end(), [txn](const LockRequest &lock_request) {
+    return txn->GetTransactionId() == lock_request.txn_id_;
+  });
   if (it == request_queue.end()) {
     txn->SetState(TransactionState::ABORTED);
     return false;
@@ -111,11 +112,12 @@ bool LockManager::Unlock(Transaction *txn, const RID &rid) {
 // @arg lck: if invoked by Unlock() method could unlock global latch.
 // @arg is_holding: if the transaction is holding the lock to be unlocked.
 // @return: true for RID-corresponding lock request queue has been empty, no need to reschedule lock grant.
-bool LockManager::UnlockImpl(Transaction *txn, const RID& rid, std::list<LockRequest>::iterator *lock_request_queue_iter,
-                              std::unique_lock<std::mutex> *lck, bool is_holding) {
-  LockRequestQueue& lock_request_queue = lock_table_[rid];
-  std::list<LockRequest>& request_queue = lock_request_queue.request_queue_;
-  
+bool LockManager::UnlockImpl(Transaction *txn, const RID &rid,
+                             std::list<LockRequest>::iterator *lock_request_queue_iter,
+                             std::unique_lock<std::mutex> *lck, bool is_holding) {
+  LockRequestQueue &lock_request_queue = lock_table_[rid];
+  std::list<LockRequest> &request_queue = lock_request_queue.request_queue_;
+
   // Remove lock on Transaction.
   LockMode lock_mode = (*lock_request_queue_iter)->lock_mode_;
   if (lock_mode == LockMode::EXCLUSIVE) {
@@ -150,7 +152,7 @@ bool LockManager::UnlockImpl(Transaction *txn, const RID& rid, std::list<LockReq
   // Check whether the released lock can be granted to other transactions.
   // After the unlock operation, it's guarenteed that there's no exclusive lock granted in the lock_request_queue.
   assert(lock_request_queue.exclusive_count == 0);
-  for (auto& lock_request : request_queue) {
+  for (auto &lock_request : request_queue) {
     if (lock_request.granted_) {
       continue;
     }
@@ -170,8 +172,8 @@ bool LockManager::UnlockImpl(Transaction *txn, const RID& rid, std::list<LockReq
 
 // Adds an edge in graph from t1 to t2(t2 waits for t1). If the edge already exists, nothing will be done.
 void LockManager::AddEdge(txn_id_t t1, txn_id_t t2) {
-  auto& wait_txns = waits_for_[t1];
-  auto it = std::find_if(wait_txns.begin(), wait_txns.end(), [t2](const txn_id_t txn_id){ return txn_id == t2; });
+  auto &wait_txns = waits_for_[t1];
+  auto it = std::find_if(wait_txns.begin(), wait_txns.end(), [t2](const txn_id_t txn_id) { return txn_id == t2; });
   if (it != wait_txns.end()) {
     return;
   }
@@ -180,8 +182,8 @@ void LockManager::AddEdge(txn_id_t t1, txn_id_t t2) {
 
 // Remove an edge in graph from t1 to t2(t2 waits for t1). If the edge doesn't exists, nothing will be done.
 void LockManager::RemoveEdge(txn_id_t t1, txn_id_t t2) {
-  auto& wait_txns = waits_for_[t1];
-  auto it = std::find_if(wait_txns.begin(), wait_txns.end(), [t2](const txn_id_t txn_id){ return txn_id == t2; });
+  auto &wait_txns = waits_for_[t1];
+  auto it = std::find_if(wait_txns.begin(), wait_txns.end(), [t2](const txn_id_t txn_id) { return txn_id == t2; });
   if (it == wait_txns.end()) {
     return;
   }
@@ -193,11 +195,12 @@ void LockManager::RemoveEdge(txn_id_t t1, txn_id_t t2) {
 
 // waits_for_latch_ is guarenteed to be acquired here.
 // @return true for cycle exists, false for no cycle.
-bool LockManager::CycleDetectImpl(txn_id_t txn, const std::unordered_set<txn_id_t>& visited, txn_id_t *txn1, txn_id_t *txn2) {
+bool LockManager::CycleDetectImpl(txn_id_t txn, const std::unordered_set<txn_id_t> &visited, txn_id_t *txn1,
+                                  txn_id_t *txn2) {
   if (waits_for_.find(txn) == waits_for_.end()) {
     return false;
   }
-  const auto& wait_txns = waits_for_[txn];
+  const auto &wait_txns = waits_for_[txn];
   for (txn_id_t wait_txn : wait_txns) {
     if (visited.find(wait_txn) != visited.end()) {
       *txn1 = txn;
@@ -217,8 +220,9 @@ bool LockManager::CycleDetectImpl(txn_id_t txn, const std::unordered_set<txn_id_
 
 // For efficiency consideration, return and abort the youngest transaction.
 bool LockManager::HasCycle(txn_id_t *txn_id) {
-  txn_id_t txn1, txn2;  // two inter-dependent transactions
-  for (const auto& wait_txn_vec : waits_for_) {
+  txn_id_t txn1;
+  txn_id_t txn2;
+  for (const auto &wait_txn_vec : waits_for_) {
     txn_id_t cur_txn = wait_txn_vec.first;
     bool cycle_detected = CycleDetectImpl(cur_txn, {} /* visited */, &txn1, &txn2);
     if (cycle_detected) {
@@ -232,7 +236,7 @@ bool LockManager::HasCycle(txn_id_t *txn_id) {
 std::vector<std::pair<txn_id_t, txn_id_t>> LockManager::GetEdgeList() {
   std::vector<std::pair<txn_id_t, txn_id_t>> waits_for_pair;
   std::unique_lock<std::mutex> lck(waits_for_latch_);
-  for (auto& [txn, wait_txns] : waits_for_) {
+  for (auto &[txn, wait_txns] : waits_for_) {
     for (txn_id_t wait_txn : wait_txns) {
       waits_for_pair.emplace_back(txn, wait_txn);
     }
@@ -244,12 +248,12 @@ std::unordered_map<txn_id_t, std::vector<std::pair<RID, bool>>> LockManager::Rec
   waits_for_.clear();
   std::unordered_map<txn_id_t, std::vector<std::pair<RID, bool>>> txns;
 
-  for (const auto& rid_request_queue : lock_table_) {
-    const RID& rid = rid_request_queue.first;
-    const LockRequestQueue& lock_request_queue = rid_request_queue.second;
+  for (const auto &rid_request_queue : lock_table_) {
+    const RID &rid = rid_request_queue.first;
+    const LockRequestQueue &lock_request_queue = rid_request_queue.second;
     std::vector<std::pair<txn_id_t, LockMode>> granted_txns;
     std::vector<std::pair<txn_id_t, LockMode>> waiting_txns;
-    for (const LockRequest& lock_request : lock_request_queue.request_queue_) {
+    for (const LockRequest &lock_request : lock_request_queue.request_queue_) {
       if (lock_request.granted_) {
         granted_txns.emplace_back(lock_request.txn_id_, lock_request.lock_mode_);
       } else {
@@ -263,18 +267,18 @@ std::unordered_map<txn_id_t, std::vector<std::pair<RID, bool>>> LockManager::Rec
       // nothing to assert
     } else if (granted_txns.size() == 1 && granted_txns[0].second == LockMode::SHARED) {
       if (!waiting_txns.empty()) {
-        for (const auto& txn_id_lock_mode : waiting_txns) {
+        for (const auto &txn_id_lock_mode : waiting_txns) {
           LockMode lock_mode = txn_id_lock_mode.second;
           assert(lock_mode != LockMode::SHARED);
         }
       }
     } else {
-      for (const auto& txn_id_lock_mode : granted_txns) {
+      for (const auto &txn_id_lock_mode : granted_txns) {
         LockMode lock_mode = txn_id_lock_mode.second;
         assert(lock_mode == LockMode::SHARED);
       }
       if (!waiting_txns.empty()) {
-        for (const auto& txn_id_lock_mode : waiting_txns) {
+        for (const auto &txn_id_lock_mode : waiting_txns) {
           LockMode lock_mode = txn_id_lock_mode.second;
           assert(lock_mode != LockMode::SHARED);
         }
@@ -283,8 +287,8 @@ std::unordered_map<txn_id_t, std::vector<std::pair<RID, bool>>> LockManager::Rec
 
     // (1) Add all transactions into maps, used when aborting transactions.
     // (2) Add dependent transaction pairs into wait-for graph.
-    for (const auto& granted_pair : granted_txns) {
-      for (const auto& waiting_pair : waiting_txns) {
+    for (const auto &granted_pair : granted_txns) {
+      for (const auto &waiting_pair : waiting_txns) {
         txn_id_t cur_granted_txn = granted_pair.first;
         txn_id_t cur_waiting_txn = waiting_pair.first;
         AddEdge(cur_granted_txn, cur_waiting_txn);
@@ -311,27 +315,26 @@ void LockManager::RunCycleDetection() {
         Transaction *txn = TransactionManager::GetTransaction(txn_id);
         assert(txn != nullptr);
         txn->SetState(TransactionState::ABORTED);
-        const std::vector<std::pair<RID, bool>>& related_lock_requests = txns[txn_id];
+        const std::vector<std::pair<RID, bool>> &related_lock_requests = txns[txn_id];
         assert(!related_lock_requests.empty());
-        for (const auto& [rid, is_holding] : related_lock_requests) {
-          LockRequestQueue& lock_request_queue = lock_table_[rid];
+        for (const auto &[rid, is_holding] : related_lock_requests) {
+          LockRequestQueue &lock_request_queue = lock_table_[rid];
           std::list<LockRequest> request_queue = lock_request_queue.request_queue_;
-          auto lock_request_queue_iter = std::find_if(request_queue.begin(), request_queue.end(),
-            [txn_id](const LockRequest& lock_request) { return lock_request.txn_id_ == txn_id; });
+          auto lock_request_queue_iter =
+              std::find_if(request_queue.begin(), request_queue.end(),
+                           [txn_id](const LockRequest &lock_request) { return lock_request.txn_id_ == txn_id; });
 
           // If the aborted transaction is holding the lock, unlock it.
           // (1) Remove lock from transaction
           // (2) Remove transaction from LockRequestQueue
           // (3) Reschedule other transactions if needed(there's other transactions waiting in the LockRequestQueue)
           // (4) Update aborted_ at LockRequest.
-          if (is_holding) {
-            UnlockImpl(txn, rid, &lock_request_queue_iter, nullptr /* global latch */, true /* is_holding */);
-          }
-
           // Otherwise,
           // (1) Remove lock from transaction
           // (2) Remove transaction from LockRequestQueue
-          else {
+          if (is_holding) {
+            UnlockImpl(txn, rid, &lock_request_queue_iter, nullptr /* global latch */, true /* is_holding */);
+          } else {
             lock_request_queue_iter->aborted_ = true;
             UnlockImpl(txn, rid, &lock_request_queue_iter, nullptr /* global latch */, false /* is_holding */);
           }

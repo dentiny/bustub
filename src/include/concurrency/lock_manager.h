@@ -38,8 +38,8 @@ class LockManager {
 
   class LockRequest {
    public:
-    LockRequest(txn_id_t txn_id, LockMode lock_mode, bool granted) :
-      txn_id_(txn_id), lock_mode_(lock_mode), granted_(granted), aborted_(false) {}
+    LockRequest(txn_id_t txn_id, LockMode lock_mode, bool granted)
+        : txn_id_(txn_id), lock_mode_(lock_mode), granted_(granted), aborted_(false) {}
 
     txn_id_t txn_id_;
     LockMode lock_mode_;
@@ -50,13 +50,13 @@ class LockManager {
   class LockRequestQueue {
    public:
     std::list<LockRequest> request_queue_;
-    std::mutex latch_;  // mutex at RID granularity
+    std::mutex latch_;            // mutex at RID granularity
     std::condition_variable cv_;  // for notifying blocked transactions on this rid
-    bool upgrading_ = false;  // if there's already txn requesting for upgrading
+    bool upgrading_ = false;      // if there's already txn requesting for upgrading
 
     // number of shared locks and exclusive locks granted, updated when the txn is decided
     // able to grant lock, or unlock
-    uint32_t shared_count = 0; 
+    uint32_t shared_count = 0;
     uint32_t exclusive_count = 0;
 
     // (1) Check whether the transaction could upgrade lock.
@@ -66,7 +66,7 @@ class LockManager {
         return false;
       }
 
-      auto it = std::find_if(request_queue_.begin(), request_queue_.end(), [txn](const LockRequest& lock_request) {
+      auto it = std::find_if(request_queue_.begin(), request_queue_.end(), [txn](const LockRequest &lock_request) {
         return lock_request.txn_id_ == txn->GetTransactionId();
       });
       if (it == request_queue_.end() || it->lock_mode_ != LockMode::SHARED || !it->granted_) {
@@ -78,17 +78,16 @@ class LockManager {
       return true;
     }
 
-    void GrantLock(Transaction *txn, const RID &rid, LockMode lock_mode, bool is_upgrade, std::unique_lock<std::mutex> *lck) {
+    void GrantLock(Transaction *txn, const RID &rid, LockMode lock_mode, bool is_upgrade,
+                   std::unique_lock<std::mutex> *lck) {
       bool can_grant = CanGrantLock(lock_mode);
       auto it = request_queue_.emplace(request_queue_.end(), txn->GetTransactionId(), lock_mode, can_grant);
 
+      // Note: if transaction get blocked, shared_count/exclusive_count will be updated within Unlock() method.
       if (!can_grant) {
         upgrading_ |= is_upgrade;
         cv_.wait(*lck, [&it]() { return it->granted_ || it->aborted_; });
-      }
-      // If transaction is granted lock right now.
-      // Note: if transaction get blocked, shared_count/exclusive_count will be updated within Unlock() method.
-      else if (lock_mode == LockMode::SHARED) {
+      } else if (lock_mode == LockMode::SHARED) {
         ++shared_count;
       } else if (lock_mode == LockMode::EXCLUSIVE) {
         ++exclusive_count;
@@ -101,7 +100,7 @@ class LockManager {
 
       // The transaction can be granted lock now.
       if (lock_mode == LockMode::SHARED) {
-        txn->AddSharedLock(rid);        
+        txn->AddSharedLock(rid);
       } else if (lock_mode == LockMode::EXCLUSIVE) {
         txn->AddExclusiveLock(rid);
       }
@@ -114,14 +113,15 @@ class LockManager {
    private:
     // Check whether transaction can be granted lock right now, otherwise it'll be added into request queue and wait.
     bool CanGrantLock(LockMode lock_mode) {
+      bool can_grant_lock = false;
       if (lock_mode == LockMode::SHARED) {
-        return request_queue_.back().granted_ && request_queue_.back().lock_mode_ == LockMode::SHARED;
+        can_grant_lock = request_queue_.back().granted_ && request_queue_.back().lock_mode_ == LockMode::SHARED;
       } else if (lock_mode == LockMode::EXCLUSIVE) {
-        return request_queue_.empty();
+        can_grant_lock = request_queue_.empty();
       } else {
         BUSTUB_ASSERT(0, "Meet unexpected lock mode when CanGrantLock() method.");
-        return false;
       }
+      return can_grant_lock;
     }
   };
 
@@ -208,14 +208,14 @@ class LockManager {
 
  private:
   // Cycle detection util.
-  bool CycleDetectImpl(txn_id_t txn, const std::unordered_set<txn_id_t>& visited, txn_id_t *txn1, txn_id_t *txn2);
+  bool CycleDetectImpl(txn_id_t txn, const std::unordered_set<txn_id_t> &visited, txn_id_t *txn1, txn_id_t *txn2);
 
   // Util for all lock methods.
-  bool LockImpl(Transaction *txn, const RID &rid, LockMode lock_mode, bool is_upgrade);
+  bool LockImpl(Transaction *txn, const RID &rid, LockMode lock_mode, bool is_upgrading);
 
   // Util for Unlock() and RunCycleDetection() methods.
-  bool UnlockImpl(Transaction *txn, const RID& rid, std::list<LockRequest>::iterator *lock_request_queue_iter,
-                    std::unique_lock<std::mutex> *lck, bool is_holding) ;
+  bool UnlockImpl(Transaction *txn, const RID &rid, std::list<LockRequest>::iterator *lock_request_queue_iter,
+                  std::unique_lock<std::mutex> *lck, bool is_holding);
 
   // Construct wait-for graph on the fly everytime RunCycleDetection() launches.
   // map: <txn, all RID waiting or holding>, true for holding, false for waiting
@@ -225,7 +225,7 @@ class LockManager {
   static constexpr bool HOLDING = true;
   static constexpr bool WAITING = false;
 
-  std::mutex latch_;  // mutex at lock_table granularity
+  std::mutex latch_;            // mutex at lock_table granularity
   std::mutex waits_for_latch_;  // mutex for waits_for_
   std::atomic<bool> enable_cycle_detection_;
   std::thread *cycle_detection_thread_;

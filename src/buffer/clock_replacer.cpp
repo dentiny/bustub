@@ -21,12 +21,11 @@ using std::vector;
 
 namespace bustub {
 
-ClockReplacer::ClockReplacer(size_t num_pages) :
-  size_(0),
-  capacity_(num_pages),
-  hand_(0),
-  refs_(vector<pair<bool, bool>>(capacity_, std::make_pair(false, false))) {
-}
+ClockReplacer::ClockReplacer(size_t num_pages)
+    : size_(0),
+      capacity_(num_pages),
+      hand_(0),
+      refs_(vector<pair<bool, bool>>(capacity_, std::make_pair(false, false))) {}
 
 ClockReplacer::~ClockReplacer() = default;
 
@@ -38,8 +37,8 @@ bool ClockReplacer::Victim(frame_id_t *frame_id) {
 
   while (true) {
     assert(hand_ < capacity_);
-    auto& entry = refs_[hand_];
-    if (entry.first) {  // exists
+    auto &entry = refs_[hand_];
+    if (entry.first) {     // exists
       if (entry.second) {  // referenced
         entry.second = false;
       } else {  // not referenced
@@ -57,7 +56,7 @@ bool ClockReplacer::Victim(frame_id_t *frame_id) {
 void ClockReplacer::Pin(frame_id_t frame_id) {
   unique_lock<mutex> lck(mtx_);
   assert(static_cast<size_t>(frame_id) < capacity_);
-  auto& entry = refs_[frame_id];
+  auto &entry = refs_[frame_id];
   if (entry.first) {
     entry.first = false;
     entry.second = false;
@@ -68,7 +67,7 @@ void ClockReplacer::Pin(frame_id_t frame_id) {
 void ClockReplacer::Unpin(frame_id_t frame_id) {
   unique_lock<mutex> lck(mtx_);
   assert(static_cast<size_t>(frame_id) < capacity_);
-  auto& entry = refs_[frame_id];
+  auto &entry = refs_[frame_id];
   if (!entry.first) {
     entry.first = true;
     entry.second = true;

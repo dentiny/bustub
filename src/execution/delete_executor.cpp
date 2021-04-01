@@ -16,10 +16,8 @@
 namespace bustub {
 
 DeleteExecutor::DeleteExecutor(ExecutorContext *exec_ctx, const DeletePlanNode *plan,
-                               std::unique_ptr<AbstractExecutor> &&child_executor):
-  AbstractExecutor(exec_ctx),
-  plan_(plan),
-  child_executor_(std::move(child_executor)) {}
+                               std::unique_ptr<AbstractExecutor> &&child_executor)
+    : AbstractExecutor(exec_ctx), plan_(plan), child_executor_(std::move(child_executor)) {}
 
 // Note: insert could be RawInsert, while delete has to be coupled with quries.
 void DeleteExecutor::Init() {
@@ -35,7 +33,7 @@ void DeleteExecutor::Init() {
 bool DeleteExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) {
   if (child_executor_->Next(tuple, rid)) {
     if (table_meta_->table_->MarkDelete(*rid, exec_ctx_->GetTransaction())) {
-      for (const auto& index_info : table_indexes_) {
+      for (const auto &index_info : table_indexes_) {
         Index *index = index_info->index_.get();
         Tuple index_key(tuple->KeyFromTuple(table_meta_->schema_, index_info->key_schema_, index->GetKeyAttrs()));
         index->DeleteEntry(index_key, *rid, exec_ctx_->GetTransaction());

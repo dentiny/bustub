@@ -47,8 +47,7 @@ bool LogRecovery::DeserializeLogRecord(const char *data, LogRecord *log_record) 
   } else if (log_type == LogRecordType::INSERT) {
     log_record->insert_rid_ = *reinterpret_cast<const RID *>(data);
     log_record->insert_tuple_.DeserializeFrom(data + sizeof(RID));
-  } else if (log_type == LogRecordType::MARKDELETE ||
-             log_type == LogRecordType::APPLYDELETE ||
+  } else if (log_type == LogRecordType::MARKDELETE || log_type == LogRecordType::APPLYDELETE ||
              log_type == LogRecordType::ROLLBACKDELETE) {
     log_record->delete_rid_ = *reinterpret_cast<const RID *>(data);
     log_record->delete_tuple_.DeserializeFrom(data + sizeof(RID));
@@ -68,8 +67,8 @@ bool LogRecovery::DeserializeLogRecord(const char *data, LogRecord *log_record) 
  *
  * How to buffer log:
  * (1) load log from storage via disk manager, the log file offset is indicated by log_file_offset
- * (2) deserialize and redo log record by record. Since log record could be partial, either due to 
- * incomplete logging, or log loading this time breaks the originally complete log record apart. 
+ * (2) deserialize and redo log record by record. Since log record could be partial, either due to
+ * incomplete logging, or log loading this time breaks the originally complete log record apart.
  * Move the partial log record to the front of the log_buffer, and continue read from storage after
  * it next time. The buffer offset is indicated by log_buffer_offset.
  *
@@ -91,13 +90,13 @@ void LogRecovery::Redo() {
   assert(!enable_logging);
   int log_file_offset = 0;
   int log_buffer_offset = 0;  // data in front of log_buffer_offset is previously loaded partial log record
-  while (disk_manager_->ReadLog(log_buffer_ + log_buffer_offset, LOG_BUFFER_SIZE - log_buffer_offset, log_file_offset)) {
+  while (
+      disk_manager_->ReadLog(log_buffer_ + log_buffer_offset, LOG_BUFFER_SIZE - log_buffer_offset, log_file_offset)) {
     int buffer_start = log_file_offset;
     log_file_offset += LOG_BUFFER_SIZE - log_buffer_offset;
     log_buffer_offset = 0;
     LogRecord log_record;
     while (DeserializeLogRecord(log_buffer_ + log_buffer_offset, &log_record)) {
-
       lsn_t log_lsn = log_record.GetLSN();
       int32_t log_size = log_record.GetSize();
       txn_id_t log_txn_id = log_record.GetTxnId();
@@ -140,9 +139,9 @@ void LogRecovery::Redo() {
       }
 
       // Redo specific operation: UPDATE, INSERT, DELETE(MARKDELETE, APPLYDELETE, ROLLBACKDELETE)
-      RID rid = log_type == LogRecordType::UPDATE ? log_record.update_rid_ :
-                log_type == LogRecordType::INSERT ? log_record.insert_rid_ :
-                log_record.delete_rid_;
+      RID rid = log_type == LogRecordType::UPDATE
+                    ? log_record.update_rid_
+                    : log_type == LogRecordType::INSERT ? log_record.insert_rid_ : log_record.delete_rid_;
       page_id_t page_id = rid.GetPageId();
       Page *page = buffer_pool_manager_->FetchPage(page_id);
       assert(page != nullptr);
@@ -191,7 +190,7 @@ void LogRecovery::Redo() {
  */
 void LogRecovery::Undo() {
   assert(!enable_logging);
-  for (auto& txn_lsn_pair : active_txn_) {
+  for (auto &txn_lsn_pair : active_txn_) {
     lsn_t lsn = txn_lsn_pair.second;
     assert(lsn != INVALID_LSN);
     LogRecord log_record;
@@ -226,9 +225,9 @@ void LogRecovery::Undo() {
       continue;
     }
 
-    RID rid = log_type == LogRecordType::UPDATE ? log_record.update_rid_ :
-              log_type == LogRecordType::INSERT ? log_record.insert_rid_ :
-              log_record.delete_rid_;
+    RID rid = log_type == LogRecordType::UPDATE
+                  ? log_record.update_rid_
+                  : log_type == LogRecordType::INSERT ? log_record.insert_rid_ : log_record.delete_rid_;
     page_id_t page_id = rid.GetPageId();
     Page *page = buffer_pool_manager_->FetchPage(page_id);
     assert(page != nullptr);

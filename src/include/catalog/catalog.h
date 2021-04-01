@@ -83,8 +83,8 @@ class Catalog {
 
     // tables_: <table_oid, unique_ptr<TableMetadata*>>
     std::unique_ptr<TableHeap> table_heap = std::make_unique<TableHeap>(bpm_, lock_manager_, log_manager_, txn);
-    std::unique_ptr<TableMetadata> table_metadata = std::make_unique<TableMetadata>(schema, table_name,
-      std::move(table_heap), cur_table_oid);
+    std::unique_ptr<TableMetadata> table_metadata =
+        std::make_unique<TableMetadata>(schema, table_name, std::move(table_heap), cur_table_oid);
     tables_[cur_table_oid] = std::move(table_metadata);
     return tables_[cur_table_oid].get();
   }
@@ -93,7 +93,7 @@ class Catalog {
   // (1) Get table_oid by table_name in names_.
   // (2) Call GetTable(table_oid) to get TableMetadata* in tables_.
   TableMetadata *GetTable(const std::string &table_name) {
-    const auto& it = names_.find(table_name);
+    const auto &it = names_.find(table_name);
     if (it == names_.end()) {
       throw std::out_of_range{"GetTable() method: " + table_name + " not found!"};
     }
@@ -102,7 +102,7 @@ class Catalog {
 
   /** @return table metadata by oid */
   TableMetadata *GetTable(table_oid_t table_oid) {
-    const auto& it = tables_.find(table_oid);
+    const auto &it = tables_.find(table_oid);
     if (it == tables_.end()) {
       throw std::out_of_range{"GetTable() method: table oid " + std::to_string(table_oid) + " not found!"};
     }
@@ -135,7 +135,7 @@ class Catalog {
     IndexMetadata *index_metadata = new IndexMetadata(index_name, table_name, &schema, key_attrs);
     Index *b_plus_index = new BPLUSTREE_INDEX_TYPE(index_metadata, bpm_);
     IndexInfo *index_info = new IndexInfo(key_schema, index_name, std::unique_ptr<Index>(b_plus_index),
-      next_index_oid_++, table_name, keysize);
+                                          next_index_oid_++, table_name, keysize);
 
     // Make sure table_name exists at index_names_. <table_name, <index_name, index_oid>>
     auto it = index_names_.find(table_name);
@@ -145,7 +145,7 @@ class Catalog {
     }
 
     // Insert into index_names_, indexes_.
-    auto& index_name_oid_map = it->second;  // <index_name, index_oid>
+    auto &index_name_oid_map = it->second;  // <index_name, index_oid>
     BUSTUB_ASSERT(index_name_oid_map.count(index_name) == 0, "index names should be unique!");
     index_name_oid_map.insert(std::make_pair(index_name, index_info->index_oid_));
     indexes_.insert(std::make_pair(index_info->index_oid_, std::unique_ptr<IndexInfo>(index_info)));
@@ -155,12 +155,12 @@ class Catalog {
   // (1) Get table_oid by table_name and index_name in index_names_.
   // (2) Call GetIndex(table_oid) to get IndexInfo* by table_oid in indexes_.
   IndexInfo *GetIndex(const std::string &index_name, const std::string &table_name) {
-    const auto& it1 = index_names_.find(table_name);
+    const auto &it1 = index_names_.find(table_name);
     if (it1 == index_names_.end()) {
       throw std::out_of_range{"GetIndex() method: " + table_name + " not found!"};
     }
-    const auto& index_oid_map = it1->second;  // <index_name, table_oid>
-    const auto& it2 = index_oid_map.find(index_name);
+    const auto &index_oid_map = it1->second;  // <index_name, table_oid>
+    const auto &it2 = index_oid_map.find(index_name);
     if (it2 == index_oid_map.end()) {
       throw std::out_of_range{"GetIndex() method: " + index_name + " not found!"};
     }
@@ -169,7 +169,7 @@ class Catalog {
 
   // Get IndexInfo* by table_oid in indexes_.
   IndexInfo *GetIndex(index_oid_t index_oid) {
-    const auto& it = indexes_.find(index_oid);
+    const auto &it = indexes_.find(index_oid);
     if (it == indexes_.end()) {
       throw std::out_of_range{"index Id of " + std::to_string(index_oid) + " not found!"};
     }
@@ -180,8 +180,8 @@ class Catalog {
     std::vector<IndexInfo *> index_info;
     auto it = index_names_.find(table_name);
     if (it != index_names_.end()) {
-      auto& index_name_oid_map = it->second;  // <index_name, index_oid>
-      for (auto& index_name_oid_pair : index_name_oid_map) {
+      auto &index_name_oid_map = it->second;  // <index_name, index_oid>
+      for (auto &index_name_oid_pair : index_name_oid_map) {
         index_info.push_back(GetIndex(index_name_oid_pair.second));
       }
     }

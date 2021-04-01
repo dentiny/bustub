@@ -24,7 +24,8 @@ namespace bustub {
 /**
  * ClockReplacer implements the clock replacement policy, which approximates the Least Recently Used policy.
  * ClockReplacer doesn't directly manages buffer frame; it only takes charge of replacement policy.
- * Frame in the replacer are those unpinned, in other words they are not currently being read by threads, which could be victimized.
+ * Frame in the replacer are those unpinned, in other words they are not currently being read by threads, which could be
+ * victimized.
  */
 class ClockReplacer : public Replacer {
  public:

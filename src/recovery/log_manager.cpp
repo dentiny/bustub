@@ -102,11 +102,11 @@ lsn_t LogManager::AppendLogRecord(LogRecord *log_record) {
   if (log_buffer_size_ + log_record->GetSize() >= LOG_BUFFER_SIZE) {
     request_flush_ = true;
     flush_cv_.notify_one();
-    append_cv_.wait(lck, [&](){ return log_buffer_size_ + log_record->GetSize() < LOG_BUFFER_SIZE; });
+    append_cv_.wait(lck, [&]() { return log_buffer_size_ + log_record->GetSize() < LOG_BUFFER_SIZE; });
   }
 
   log_record->lsn_ = next_lsn_++;
-  memcpy(log_buffer_ + log_buffer_size_, log_record, LogRecord::HEADER_SIZE);
+  memmove(log_buffer_ + log_buffer_size_, log_record, LogRecord::HEADER_SIZE);
   int offset = log_buffer_size_ + LogRecord::HEADER_SIZE;  // offset of log_buffer_ to write into
 
   LogRecordType log_type = log_record->log_record_type_;
@@ -123,7 +123,7 @@ lsn_t LogManager::AppendLogRecord(LogRecord *log_record) {
     memcpy(log_buffer_ + offset, &log_record->update_rid_, sizeof(RID));
     offset += sizeof(RID);
     log_record->old_tuple_.SerializeTo(log_buffer_ + offset);
-    offset += log_record->old_tuple_.GetLength() + sizeof(int32_t);
+    offset += static_cast<int>(log_record->old_tuple_.GetLength()) + sizeof(int32_t);
     log_record->new_tuple_.SerializeTo(log_buffer_ + offset);
   } else if (log_type == LogRecordType::NEWPAGE) {
     memcpy(log_buffer_ + offset, &log_record->prev_page_id_, sizeof(page_id_t));

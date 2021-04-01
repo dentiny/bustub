@@ -196,7 +196,7 @@ int B_PLUS_TREE_LEAF_PAGE_TYPE::RemoveAndDeleteRecord(const KeyType &key, const 
  */
 INDEX_TEMPLATE_ARGUMENTS
 void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveAllTo(BPlusTreeLeafPage *recipient, int index_in_parent,
-                                            BufferPoolManager *buffer_pool_manager) {
+                                           BufferPoolManager *buffer_pool_manager) {
   assert(recipient != nullptr);
   assert(buffer_pool_manager != nullptr);
 
@@ -227,7 +227,7 @@ void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveFirstToEndOf(BPlusTreeLeafPage *recipient,
   assert(buffer_pool_manager != nullptr);
 
   // Get and remove the first item of self array, to the end of recipient.
-  const MappingType& kv = GetItem(0 /* index */);
+  const MappingType &kv = GetItem(0 /* index */);
   for (int ii = 0; ii < old_size - 1; ++ii) {
     array[ii] = array[ii + 1];
   }
@@ -239,7 +239,7 @@ void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveFirstToEndOf(BPlusTreeLeafPage *recipient,
   page_id_t parent_page_id = GetParentPageId();
   Page *page = buffer_pool_manager->FetchPage(parent_page_id);
   assert(page != nullptr);
-  B_PLUS_TREE_INTERNAL_PAGE *parent_page = reinterpret_cast<B_PLUS_TREE_INTERNAL_PAGE*>(page->GetData());
+  B_PLUS_TREE_INTERNAL_PAGE *parent_page = reinterpret_cast<B_PLUS_TREE_INTERNAL_PAGE *>(page->GetData());
   int value_idx = parent_page->ValueIndex(page_id);  // index of self leaf page's first key in parent page
   parent_page->SetKeyAt(value_idx /* index */, KeyAt(0 /* index */));
   buffer_pool_manager->UnpinPage(parent_page_id, true /* is_dirty */);
@@ -261,7 +261,7 @@ void B_PLUS_TREE_LEAF_PAGE_TYPE::CopyLastFrom(const MappingType &item) {
  */
 INDEX_TEMPLATE_ARGUMENTS
 void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveLastToFrontOf(BPlusTreeLeafPage *recipient,
-                                                    BufferPoolManager *buffer_pool_manager) {
+                                                   BufferPoolManager *buffer_pool_manager) {
   // Current leaf page should at least have 2 items: 1 to move, 1 to update parent.
   int old_size = GetSize();
   assert(old_size >= 2);
@@ -269,7 +269,7 @@ void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveLastToFrontOf(BPlusTreeLeafPage *recipient,
   assert(buffer_pool_manager != nullptr);
 
   // Get the move the last item to the front of recipient.
-  const MappingType& kv = GetItem(old_size - 1 /* index */);
+  const MappingType &kv = GetItem(old_size - 1 /* index */);
   IncreaseSize(-1);
   recipient->CopyFirstFrom(kv, buffer_pool_manager);
 }
@@ -294,7 +294,7 @@ void B_PLUS_TREE_LEAF_PAGE_TYPE::CopyFirstFrom(const MappingType &item, BufferPo
   page_id_t parent_page_id = GetParentPageId();
   Page *page = buffer_pool_manager->FetchPage(parent_page_id);
   assert(page != nullptr);
-  B_PLUS_TREE_INTERNAL_PAGE *parent_page = reinterpret_cast<B_PLUS_TREE_INTERNAL_PAGE*>(page->GetData());
+  B_PLUS_TREE_INTERNAL_PAGE *parent_page = reinterpret_cast<B_PLUS_TREE_INTERNAL_PAGE *>(page->GetData());
   int value_idx = parent_page->ValueIndex(page_id);
   parent_page->SetKeyAt(value_idx /* index */, KeyAt(0 /* index */));
   buffer_pool_manager->UnpinPage(parent_page_id, true /* is_dirty */);

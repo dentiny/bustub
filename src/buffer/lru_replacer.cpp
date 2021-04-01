@@ -59,6 +59,13 @@ void LRUReplacer::Unpin(frame_id_t frame_id) {
   if (map_it != frame_map_.end()) {
     return;  // the frame to unpin is already in the LRUReplacer
   }
+
+  // If the LRU replacer has been full, evict the least frequent accessed one.
+  if (frames_.size() == capacity_) {
+    frame_id_t victim_frame_id = frames_.back();
+    Remove(victim_frame_id);
+  }
+  assert(frames_.size() < capacity_);
   frames_.push_front(frame_id);
   frame_map_.emplace(frame_id, frames_.begin());
 }

@@ -89,8 +89,8 @@ class BPlusTree {
 
   // expose for test purpose
   // Return type is LeafPage*, should reinterpret_cast<LeafPage*> when use.
-  BPlusTreePage *FindLeafPage(const KeyType &key, bool leftMost = false,
-                      Transaction *transaction = nullptr, OpType op = OpType::SEARCH);
+  BPlusTreePage *FindLeafPage(const KeyType &key, bool leftMost = false, Transaction *transaction = nullptr,
+                              OpType op = OpType::SEARCH);
 
  private:
   void StartNewTree(const KeyType &key, const ValueType &value);
@@ -118,12 +118,12 @@ class BPlusTree {
   void UpdateRootPageId(int insert_record = 0);
 
   // Util invoked at CoalesceOrRedistribute() method.
-  template<typename N>
+  template <typename N>
   bool GetSibling(InternalPage *parent_page, N *node, N **sibling);
 
   // Apply Basic Latch Crabbing Protocol to fetch new page.
-  BPlusTreePage *CrabbingProtocalFetchPage(page_id_t page_id, page_id_t prev_page_id,
-                                            Transaction *transaction, OpType op);
+  BPlusTreePage *CrabbingProtocalFetchPage(page_id_t page_id, page_id_t prev_page_id, Transaction *transaction,
+                                           OpType op);
 
   // Unlock and unpin/delete page within transaction.
   void FreePageWithinTransaction(page_id_t page_id, Transaction *transaction, bool exclusive);

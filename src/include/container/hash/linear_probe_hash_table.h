@@ -115,9 +115,9 @@ class LinearProbeHashTable : public HashTable<KeyType, ValueType, KeyComparator>
 
   // Keep book of how entries are stored.
   static constexpr size_t bucket_num_per_page_ = BLOCK_ARRAY_SIZE;
-  size_t bucket_num_;  // number of buckets
-  size_t bucket_page_num_;  // number of pages to store buckets
-  size_t last_page_bucket_num_;  // bucket number for the last bucket page
+  size_t bucket_num_;                       // number of buckets
+  size_t bucket_page_num_;                  // number of pages to store buckets
+  size_t last_page_bucket_num_;             // bucket number for the last bucket page
   std::vector<page_id_t> bucket_page_ids_;  // map page id(index) to real page id
 };
 

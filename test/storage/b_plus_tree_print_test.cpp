@@ -41,7 +41,7 @@ std::string usageMessage() {
 }
 
 // Remove 'DISABLED_' when you are ready
-TEST(BptTreeTest, UnitTest) {
+TEST(BptTreeTest, DISABLED_UnitTest) {
   int64_t key = 0;
   GenericKey<8> index_key;
   RID rid;

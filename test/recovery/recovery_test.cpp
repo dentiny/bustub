@@ -39,8 +39,7 @@ TEST(LogManagerTest, BasicLogging) {
 
   LOG_DEBUG("Create a test table");
   Transaction *txn = bustub_instance->transaction_manager_->Begin();
-  TableHeap *test_table = new TableHeap(bustub_instance->buffer_pool_manager_,
-                                        bustub_instance->lock_manager_,
+  TableHeap *test_table = new TableHeap(bustub_instance->buffer_pool_manager_, bustub_instance->lock_manager_,
                                         bustub_instance->log_manager_, txn);
   LOG_DEBUG("Insert and delete a random tuple");
 
@@ -76,8 +75,7 @@ TEST(LogManagerTest, BasicLogging) {
   remove("test.log");
 }
 
-void StartTransaction(BustubInstance *bustub_instance, TableHeap *test_table)
-{
+void StartTransaction(BustubInstance *bustub_instance, TableHeap *test_table) {
   // LOG_DEBUG("Create a test table");
   Transaction *txn = bustub_instance->transaction_manager_->Begin();
   // LOG_DEBUG("Insert and delete a random tuple");
@@ -94,14 +92,12 @@ void StartTransaction(BustubInstance *bustub_instance, TableHeap *test_table)
   delete schema;
 }
 
-void StartTransaction1(BustubInstance *bustub_instance, TableHeap *test_table)
-{
+void StartTransaction1(BustubInstance *bustub_instance, TableHeap *test_table) {
   // LOG_DEBUG("Create a test table");
   Transaction *txn = bustub_instance->transaction_manager_->Begin();
   // LOG_DEBUG("Insert and delete a random tuple");
 
-  for (int i = 0; i < 10; i++)
-  {
+  for (int i = 0; i < 10; i++) {
     std::string createStmt = "a bigint";
     Schema *schema = ParseCreateStatement(createStmt);
     RID rid;
@@ -114,7 +110,6 @@ void StartTransaction1(BustubInstance *bustub_instance, TableHeap *test_table)
   delete txn;
 }
 
-
 TEST(LogManagerTest, LoggingWithGroupCommit) {
   BustubInstance *bustub_instance = new BustubInstance("test.db");
   EXPECT_FALSE(enable_logging);
@@ -126,8 +121,7 @@ TEST(LogManagerTest, LoggingWithGroupCommit) {
 
   // LOG_DEBUG("Create a test table");
   Transaction *txn = bustub_instance->transaction_manager_->Begin();
-  TableHeap *test_table = new TableHeap(bustub_instance->buffer_pool_manager_,
-                                        bustub_instance->lock_manager_,
+  TableHeap *test_table = new TableHeap(bustub_instance->buffer_pool_manager_, bustub_instance->lock_manager_,
                                         bustub_instance->log_manager_, txn);
   // LOG_DEBUG("Insert and delete a random tuple");
 
@@ -182,13 +176,11 @@ TEST(LogManagerTest, SingleLoggingWithBufferFull) {
 
   // LOG_DEBUG("Create a test table");
   Transaction *txn = bustub_instance->transaction_manager_->Begin();
-  TableHeap *test_table = new TableHeap(bustub_instance->buffer_pool_manager_,
-                                        bustub_instance->lock_manager_,
+  TableHeap *test_table = new TableHeap(bustub_instance->buffer_pool_manager_, bustub_instance->lock_manager_,
                                         bustub_instance->log_manager_, txn);
   // LOG_DEBUG("Insert and delete a random tuple");
 
-  for (int i = 0; i < 13; i++)
-  {
+  for (int i = 0; i < 13; i++) {
     std::string createStmt = "a bigint";
     Schema *schema = ParseCreateStatement(createStmt);
     RID rid;
@@ -233,13 +225,11 @@ TEST(LogManagerTest, MultiLoggingWithBufferFull) {
 
   // LOG_DEBUG("Create a test table");
   Transaction *txn = bustub_instance->transaction_manager_->Begin();
-  TableHeap *test_table = new TableHeap(bustub_instance->buffer_pool_manager_,
-                                        bustub_instance->lock_manager_,
+  TableHeap *test_table = new TableHeap(bustub_instance->buffer_pool_manager_, bustub_instance->lock_manager_,
                                         bustub_instance->log_manager_, txn);
   // LOG_DEBUG("Insert and delete a random tuple");
 
-  for (int i = 0; i < 13; i++)
-  {
+  for (int i = 0; i < 13; i++) {
     std::string createStmt = "a bigint";
     Schema *schema = ParseCreateStatement(createStmt);
     RID rid;

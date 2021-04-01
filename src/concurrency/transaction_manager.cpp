@@ -21,11 +21,11 @@
 /*
  * Notes on logging:
  * (1) AppendLogRecord on Begin, Commit, and Abort.
- * (2) Within TransactionManager, whenever you call the Commit or Abort method, you need to make 
+ * (2) Within TransactionManager, whenever you call the Commit or Abort method, you need to make
  * sure your log records are permanently stored on disk file before releasing the locks. But instead
  * of forcing a flush, you need to wait for log_timeout or other operations to implicitly trigger
  * the flush operations. => apply group commit
- */ 
+ */
 
 namespace bustub {
 

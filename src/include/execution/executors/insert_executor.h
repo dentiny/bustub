@@ -47,7 +47,7 @@ class InsertExecutor : public AbstractExecutor {
   bool Next([[maybe_unused]] Tuple *tuple, RID *rid) override;
 
  private:
-  void InsertTupleAndIndex(Tuple *tuple, RID *rid, Transaction *transaction);
+  void InsertTupleAndIndex(Tuple *tuple, RID *rid, Transaction *txn);
 
  private:
   /** The insert plan node to be executed. */

@@ -48,7 +48,7 @@ bool BPLUSTREE_TYPE::GetValue(const KeyType &key, std::vector<ValueType> *result
     return false;
   }
 
-  LeafPage *leaf_page = reinterpret_cast<LeafPage*>(FindLeafPage(key, false /* leftmost */, transaction));
+  LeafPage *leaf_page = reinterpret_cast<LeafPage *>(FindLeafPage(key, false /* leftmost */, transaction));
   assert(leaf_page != nullptr);
   result->resize(1);
   bool lookup_res = leaf_page->Lookup(key, result->data(), comparator_);
@@ -92,7 +92,7 @@ void BPLUSTREE_TYPE::StartNewTree(const KeyType &key, const ValueType &value) {
   assert(page != nullptr);
 
   // Initialize leaf page metadata.
-  LeafPage *root_page = reinterpret_cast<LeafPage*>(page->GetData());
+  LeafPage *root_page = reinterpret_cast<LeafPage *>(page->GetData());
   root_page->Init(root_page_id_, INVALID_PAGE_ID /* parent_id */, leaf_max_size_);  // max_size takes it default value
   UpdateRootPageId(1 /* insert */);  // create a new record<index_name + root_page_id> in header_page
 
@@ -113,8 +113,8 @@ INDEX_TEMPLATE_ARGUMENTS
 bool BPLUSTREE_TYPE::InsertIntoLeaf(const KeyType &key, const ValueType &value, Transaction *transaction) {
   assert(transaction != nullptr);
 
-  LeafPage *leaf_page = reinterpret_cast<LeafPage*>(FindLeafPage(key, false /* leftmost */,
-                                                                  transaction, OpType::INSERT));
+  LeafPage *leaf_page =
+      reinterpret_cast<LeafPage *>(FindLeafPage(key, false /* leftmost */, transaction, OpType::INSERT));
   assert(leaf_page != nullptr);
 
   // DB B+ Tree only supports unique key.
@@ -158,7 +158,7 @@ N *BPLUSTREE_TYPE::Split(N *node, Transaction *transaction) {
   if (transaction != nullptr) {
     transaction->AddIntoPageSet(new_page);
   }
-  N *new_node = reinterpret_cast<N*>(new_page->GetData());
+  N *new_node = reinterpret_cast<N *>(new_page->GetData());
   new_node->Init(new_page_id, node->GetParentPageId());
   node->MoveHalfTo(new_node, buffer_pool_manager_);
   return new_node;
@@ -189,7 +189,7 @@ void BPLUSTREE_TYPE::InsertIntoParent(BPlusTreePage *old_node, const KeyType &ke
     Page *page = buffer_pool_manager_->NewPage(&root_page_id);
     root_page_id_ = root_page_id;
     assert(page != nullptr);
-    InternalPage *new_root_page = reinterpret_cast<InternalPage*>(page->GetData());
+    InternalPage *new_root_page = reinterpret_cast<InternalPage *>(page->GetData());
     new_root_page->Init(root_page_id_, INVALID_PAGE_ID /* parent_page_id */, internal_max_size_);
     new_root_page->PopulateNewRoot(old_node->GetPageId(), key, new_node->GetPageId());
     old_node->SetParentPageId(root_page_id_);
@@ -204,7 +204,7 @@ void BPLUSTREE_TYPE::InsertIntoParent(BPlusTreePage *old_node, const KeyType &ke
   page_id_t parent_page_id = old_node->GetParentPageId();
   Page *page = buffer_pool_manager_->FetchPage(parent_page_id);
   assert(page != nullptr);
-  InternalPage *parent_page = reinterpret_cast<InternalPage*>(page->GetData());
+  InternalPage *parent_page = reinterpret_cast<InternalPage *>(page->GetData());
   new_node->SetParentPageId(parent_page_id);
   buffer_pool_manager_->UnpinPage(new_node->GetPageId(), true /* is_dirty */);
   parent_page->InsertNodeAfter(old_node->GetPageId(), key, new_node->GetPageId());  // old_value, new_key, new_value
@@ -234,7 +234,7 @@ void BPLUSTREE_TYPE::Remove(const KeyType &key, Transaction *transaction) {
     return;
   }
 
-  LeafPage *leaf = reinterpret_cast<LeafPage*>(FindLeafPage(key, false /* leftmost */, transaction, OpType::DELETE));
+  LeafPage *leaf = reinterpret_cast<LeafPage *>(FindLeafPage(key, false /* leftmost */, transaction, OpType::DELETE));
   int cur_size = leaf->RemoveAndDeleteRecord(key, comparator_);
   if (cur_size < leaf->GetMinSize()) {
     CoalesceOrRedistribute(leaf, transaction);
@@ -277,7 +277,7 @@ bool BPLUSTREE_TYPE::CoalesceOrRedistribute(N *node, Transaction *transaction) {
   page_id_t parent_page_id = node->GetParentPageId();
   Page *page = buffer_pool_manager_->FetchPage(parent_page_id);
   assert(page != nullptr);
-  InternalPage *parent_page = reinterpret_cast<InternalPage*>(page->GetData());
+  InternalPage *parent_page = reinterpret_cast<InternalPage *>(page->GetData());
 
   // Find the sibling node of input page.
   N *sibling_page = nullptr;
@@ -314,10 +314,10 @@ bool BPLUSTREE_TYPE::CoalesceOrRedistribute(N *node, Transaction *transaction) {
 /*
  * Util method invoked only within CoalesceOrRedistribute() method.
  * @return: true means sibling is previous node, false means it's next node.
- */ 
+ */
 
 INDEX_TEMPLATE_ARGUMENTS
-template<typename N>
+template <typename N>
 bool BPLUSTREE_TYPE::GetSibling(InternalPage *parent_page, N *node, N **sibling) {
   assert(parent_page != nullptr);
   assert(node != nullptr);
@@ -331,7 +331,7 @@ bool BPLUSTREE_TYPE::GetSibling(InternalPage *parent_page, N *node, N **sibling)
   page_id_t sibling_page_id = parent_page->ValueAt(sibling_index);
   Page *page = buffer_pool_manager_->FetchPage(sibling_page_id);
   assert(page != nullptr);
-  *sibling = reinterpret_cast<N*>(page->GetData());
+  *sibling = reinterpret_cast<N *>(page->GetData());
 
   // Unpin parent page.
   buffer_pool_manager_->UnpinPage(parent_page_id, false /* is_dirty */);
@@ -388,7 +388,7 @@ bool BPLUSTREE_TYPE::Coalesce(N **neighbor_node, N **node,
  * Using template N to represent either internal page or leaf page.
  * @param   neighbor_node      sibling page of input "node"
  * @param   node               input from method coalesceOrRedistribute()
- * Note: 
+ * Note:
  */
 INDEX_TEMPLATE_ARGUMENTS
 template <typename N>
@@ -426,7 +426,7 @@ bool BPLUSTREE_TYPE::AdjustRoot(BPlusTreePage *old_root_node) {
   // Note: root page is an internal page
   if (old_root_node->GetSize() == 1) {
     // Set the only child as new root
-    InternalPage *old_root_page = reinterpret_cast<InternalPage*>(old_root_node);
+    InternalPage *old_root_page = reinterpret_cast<InternalPage *>(old_root_node);
     page_id_t new_root_page_id = old_root_page->RemoveAndReturnOnlyChild();
     root_page_id_ = new_root_page_id;
     UpdateRootPageId(0 /* update */);
@@ -434,7 +434,7 @@ bool BPLUSTREE_TYPE::AdjustRoot(BPlusTreePage *old_root_node) {
     // Update child page's parent page id
     Page *page = buffer_pool_manager_->FetchPage(root_page_id_);
     assert(page != nullptr);
-    BPlusTreePage *new_root_page = reinterpret_cast<BPlusTreePage*>(page->GetData());
+    BPlusTreePage *new_root_page = reinterpret_cast<BPlusTreePage *>(page->GetData());
     new_root_page->SetParentPageId(INVALID_PAGE_ID);
     buffer_pool_manager_->UnpinPage(root_page_id_, true /* is_dirty */);
 
@@ -470,7 +470,7 @@ bool BPLUSTREE_TYPE::AdjustRoot(BPlusTreePage *old_root_node) {
 INDEX_TEMPLATE_ARGUMENTS
 INDEXITERATOR_TYPE BPLUSTREE_TYPE::begin() {
   KeyType key{};  // placeholder
-  LeafPage *leftmost_leaf = reinterpret_cast<LeafPage*>(FindLeafPage(key, true /* leftmost */));
+  LeafPage *leftmost_leaf = reinterpret_cast<LeafPage *>(FindLeafPage(key, true /* leftmost */));
   Unlock(leftmost_leaf->GetPageId(), false /* exclusive */);
   return INDEXITERATOR_TYPE(leftmost_leaf, 0 /* index */, buffer_pool_manager_);
 }
@@ -482,7 +482,7 @@ INDEXITERATOR_TYPE BPLUSTREE_TYPE::begin() {
  */
 INDEX_TEMPLATE_ARGUMENTS
 INDEXITERATOR_TYPE BPLUSTREE_TYPE::Begin(const KeyType &key) {
-  LeafPage *leaf = reinterpret_cast<LeafPage*>(FindLeafPage(key));
+  LeafPage *leaf = reinterpret_cast<LeafPage *>(FindLeafPage(key));
   if (leaf == nullptr) {
     return INDEXITERATOR_TYPE(nullptr /* leaf */, 0 /* index */, buffer_pool_manager_);
   }
@@ -497,9 +497,7 @@ INDEXITERATOR_TYPE BPLUSTREE_TYPE::Begin(const KeyType &key) {
  * @return : index iterator
  */
 INDEX_TEMPLATE_ARGUMENTS
-INDEXITERATOR_TYPE BPLUSTREE_TYPE::end() {
-  return INDEXITERATOR_TYPE(nullptr, 0 /* index */, buffer_pool_manager_);
-}
+INDEXITERATOR_TYPE BPLUSTREE_TYPE::end() { return INDEXITERATOR_TYPE(nullptr, 0 /* index */, buffer_pool_manager_); }
 
 /*****************************************************************************
  * UTILITIES AND DEBUG
@@ -518,8 +516,8 @@ BPlusTreePage *BPLUSTREE_TYPE::FindLeafPage(const KeyType &key, bool leftMost, T
 
   page_id_t cur_page_id = root_page_id_;
   BPlusTreePage *cur_page = CrabbingProtocalFetchPage(cur_page_id, INVALID_PAGE_ID /* prev_page */, transaction, op);
-  for ( ; !cur_page->IsLeafPage(); ) {
-    InternalPage *internal_page = reinterpret_cast<InternalPage*>(cur_page);
+  for (; !cur_page->IsLeafPage();) {
+    InternalPage *internal_page = reinterpret_cast<InternalPage *>(cur_page);
     page_id_t new_page_id = leftMost ? internal_page->ValueAt(0) : internal_page->Lookup(key, comparator_);
     cur_page = CrabbingProtocalFetchPage(new_page_id, cur_page_id, transaction, op);
     cur_page_id = new_page_id;
@@ -527,24 +525,24 @@ BPlusTreePage *BPLUSTREE_TYPE::FindLeafPage(const KeyType &key, bool leftMost, T
   return cur_page;
 }
 
-/* 
+/*
  * Basic Latch Crabbing Protocol:
  * Search: Start at root and go down, repeatedly acquire latch on child and then unlatch parent.
  * Insert/Delete: Start at root and go down, obtaining X latches as needed. Once child is latched, check
  * if it is safe. If the child is safe, release latches on all its ancestors.
- * 
+ *
  * (1) Lock current page.
  * (2) Release all previous latched pages if no chaining exclusive operations.
  * (3) (For transaction)Add current page into transaction latched page set.
  */
 INDEX_TEMPLATE_ARGUMENTS
 BPlusTreePage *BPLUSTREE_TYPE::CrabbingProtocalFetchPage(page_id_t page_id, page_id_t prev_page_id,
-                                                          Transaction *transaction, OpType op) {
+                                                         Transaction *transaction, OpType op) {
   bool exclusive = op != OpType::SEARCH;
   Page *page = buffer_pool_manager_->FetchPage(page_id);
   assert(page != nullptr);
   Lock(page, exclusive);
-  BPlusTreePage *tree_page = reinterpret_cast<BPlusTreePage*>(page->GetData());
+  BPlusTreePage *tree_page = reinterpret_cast<BPlusTreePage *>(page->GetData());
   if (prev_page_id != INVALID_PAGE_ID && tree_page->IsSafeOp(op)) {
     // With no chaining exclusive operation, free all previous latched pages.
     FreePageWithinTransaction(prev_page_id, transaction, exclusive);

@@ -42,9 +42,7 @@ void BPlusTreePage::SetMaxSize(int size) { max_size_ = size; }
  * Note: for root page, if leaf page, could have only one entry;
  * if internal page, at least two entries.
  */
-int BPlusTreePage::GetMinSize() const {
-  return !IsRootPage() ? (max_size_ / 2) : IsLeafPage() ? 1 : 2;
-}
+int BPlusTreePage::GetMinSize() const { return !IsRootPage() ? (max_size_ / 2) : IsLeafPage() ? 1 : 2; }
 
 /*
  * Helper methods to get/set parent page id

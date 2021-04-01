@@ -28,9 +28,13 @@ namespace bustub {
  */
 class LogManager {
  public:
-  explicit LogManager(DiskManager *disk_manager) :
-    next_lsn_(0), persistent_lsn_(INVALID_LSN), cur_lsn_{INVALID_LSN}, log_buffer_size_{0}, flush_buffer_size_{0},
-      disk_manager_(disk_manager) {
+  explicit LogManager(DiskManager *disk_manager)
+      : next_lsn_(0),
+        persistent_lsn_(INVALID_LSN),
+        cur_lsn_{INVALID_LSN},
+        log_buffer_size_{0},
+        flush_buffer_size_{0},
+        disk_manager_(disk_manager) {
     log_buffer_ = new char[LOG_BUFFER_SIZE];
     flush_buffer_ = new char[LOG_BUFFER_SIZE];
   }
