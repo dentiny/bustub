@@ -12,7 +12,9 @@
 
 #pragma once
 
+#include <cassert>
 #include <memory>
+#include <utility>
 
 namespace bustub {
 
@@ -21,9 +23,13 @@ namespace bustub {
  */
 template <typename T>
 class Matrix {
- protected:
+ public:
   // TODO(P0): Add implementation
-  Matrix(int r, int c) {}
+  Matrix(int r, int c) : rows(r), cols(c) {
+    assert(r > 0);
+    assert(c > 0);
+    linear = new T[r * c]{};
+  }
 
   // # of rows in the matrix
   int rows;
@@ -51,32 +57,57 @@ class Matrix {
   virtual void MatImport(T *arr) = 0;
 
   // TODO(P0): Add implementation
-  virtual ~Matrix() = default;
+  virtual ~Matrix() {
+    delete(linear);
+  }
 };
 
 template <typename T>
 class RowMatrix : public Matrix<T> {
+  using Matrix<T>::rows;
+  using Matrix<T>::cols;
+  using Matrix<T>::linear;
+
  public:
   // TODO(P0): Add implementation
-  RowMatrix(int r, int c) : Matrix<T>(r, c) {}
+  RowMatrix(int r, int c) : Matrix<T>(r, c) {
+    assert(r > 0);
+    assert(c > 0);
+    data_ = new T*[r]{};
+    for (int idx = 0; idx < rows; ++idx) {
+      data_[idx] = &linear[idx * cols];
+    }
+  }
 
   // TODO(P0): Add implementation
-  int GetRows() override { return 0; }
+  int GetRows() override { return rows; }
 
   // TODO(P0): Add implementation
-  int GetColumns() override { return 0; }
+  int GetColumns() override { return cols; }
 
   // TODO(P0): Add implementation
-  T GetElem(int i, int j) override { return data_[i][j]; }
+  T GetElem(int i, int j) override {
+    assert(i >= 0 && i < rows);
+    assert(j >= 0 && j < cols);
+    return data_[i][j];
+  }
 
   // TODO(P0): Add implementation
-  void SetElem(int i, int j, T val) override {}
+  void SetElem(int i, int j, T val) override {
+    assert(i >= 0 && i < rows);
+    assert(j >= 0 && j < cols);
+    data_[i][j] = val;
+  }
 
   // TODO(P0): Add implementation
-  void MatImport(T *arr) override {}
+  void MatImport(T *arr) override {
+    memmove(linear, arr, sizeof(T) * rows * cols);
+  }
 
   // TODO(P0): Add implementation
-  ~RowMatrix() override = default;
+  ~RowMatrix() override {
+    delete data_;
+  }
 
  private:
   // 2D array containing the elements of the matrix in row-major format
@@ -91,30 +122,56 @@ class RowMatrixOperations {
  public:
   // Compute (mat1 + mat2) and return the result.
   // Return nullptr if dimensions mismatch for input matrices.
-  static std::unique_ptr<RowMatrix<T>> AddMatrices(std::unique_ptr<RowMatrix<T>> mat1,
-                                                   std::unique_ptr<RowMatrix<T>> mat2) {
-    // TODO(P0): Add code
-
-    return std::unique_ptr<RowMatrix<T>>(nullptr);
+  static std::unique_ptr<RowMatrix<T>> AddMatrices(std::unique_ptr<RowMatrix<T>>&& mat1,
+                                                   std::unique_ptr<RowMatrix<T>>&& mat2) {
+    int r1 = mat1->GetRows();
+    int c1 = mat1->GetColumns();
+    int r2 = mat2->GetRows();
+    int c2 = mat2->GetColumns();
+    assert(r1 == r2);
+    assert(c1 == c2);
+    std::unique_ptr<RowMatrix<T>> res = std::make_unique<RowMatrix<T>>(r1, c1);
+    for (int idx1 = 0; idx1 < r1; ++idx1) {
+      for (int idx2 = 0; idx2 < c1; ++idx2) {
+        T val1 = mat1->GetElem(idx1, idx2);
+        T val2 = mat2->GetElem(idx1, idx2);
+        res->SetElem(idx1, idx2, val1 + val2);
+      }
+    }
+    return res;
   }
 
   // Compute matrix multiplication (mat1 * mat2) and return the result.
   // Return nullptr if dimensions mismatch for input matrices.
   static std::unique_ptr<RowMatrix<T>> MultiplyMatrices(std::unique_ptr<RowMatrix<T>> mat1,
                                                         std::unique_ptr<RowMatrix<T>> mat2) {
-    // TODO(P0): Add code
-
-    return std::unique_ptr<RowMatrix<T>>(nullptr);
+    int r1 = mat1->GetRows();
+    int c1 = mat1->GetColumns();
+    int r2 = mat2->GetRows();
+    int c2 = mat2->GetColumns();
+    assert(c1 == r2);
+    int dim = c1;
+    std::unique_ptr<RowMatrix<T>> res = std::make_unique<RowMatrix<T>>(r1, c2);
+    for (int idx1 = 0; idx1 < r1; ++idx1) {
+      for (int idx2 = 0; idx2 < c2; ++idx2) {
+        T v{};
+        for (int idx3 = 0; idx3 < dim; ++idx3) {
+          T val1 = mat1->GetElem(idx1, idx3);
+          T val2 = mat2->GetElem(idx3, idx2);
+          v += val1 * val2;
+        }
+        res->SetElem(idx1, idx2, v);
+      }
+    }
+    return res;
   }
 
   // Simplified GEMM (general matrix multiply) operation
   // Compute (matA * matB + matC). Return nullptr if dimensions mismatch for input matrices
-  static std::unique_ptr<RowMatrix<T>> GemmMatrices(std::unique_ptr<RowMatrix<T>> matA,
-                                                    std::unique_ptr<RowMatrix<T>> matB,
-                                                    std::unique_ptr<RowMatrix<T>> matC) {
-    // TODO(P0): Add code
-
-    return std::unique_ptr<RowMatrix<T>>(nullptr);
+  static std::unique_ptr<RowMatrix<T>> GemmMatrices(std::unique_ptr<RowMatrix<T>>&& matA,
+                                                    std::unique_ptr<RowMatrix<T>>&& matB,
+                                                    std::unique_ptr<RowMatrix<T>>&& matC) {
+    return AddMatrices(MultiplyMatrices(std::move(matA), std::move(matB)), std::move(matC));
   }
 };
 }  // namespace bustub
