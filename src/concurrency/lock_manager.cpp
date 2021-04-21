@@ -329,12 +329,12 @@ void LockManager::RunCycleDetection() {
           // (2) Remove transaction from LockRequestQueue
           // (3) Reschedule other transactions if needed(there's other transactions waiting in the LockRequestQueue)
           // (4) Update aborted_ at LockRequest.
-          // Otherwise,
-          // (1) Remove lock from transaction
-          // (2) Remove transaction from LockRequestQueue
           if (is_holding) {
             UnlockImpl(txn, rid, &lock_request_queue_iter, nullptr /* global latch */, true /* is_holding */);
           } else {
+            // Otherwise,
+            // (1) Remove lock from transaction
+            // (2) Remove transaction from LockRequestQueue
             lock_request_queue_iter->aborted_ = true;
             UnlockImpl(txn, rid, &lock_request_queue_iter, nullptr /* global latch */, false /* is_holding */);
           }
