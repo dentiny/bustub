@@ -16,14 +16,14 @@
 
 namespace bustub {
 
-TEST(LRUKReplacerTest, DISABLED_SampleTest) {
+TEST(LRUKReplacerTest, SampleTest) {
   // Note that comparison with `std::nullopt` always results in `false`, and if the optional type actually does contain
   // a value, the comparison will compare the inner value.
   // See: https://devblogs.microsoft.com/oldnewthing/20211004-00/?p=105754
   std::optional<frame_id_t> frame;
 
   // Initialize the replacer.
-  LRUKReplacer lru_replacer(7, 2);
+  LRUKReplacer lru_replacer(/*num_frames=*/7, /*k=*/2);
 
   // Add six frames to the replacer. We now have frames [1, 2, 3, 4, 5]. We set frame 6 as non-evictable.
   lru_replacer.RecordAccess(1);
@@ -67,12 +67,14 @@ TEST(LRUKReplacerTest, DISABLED_SampleTest) {
   // Look for a frame to evict. We expect frame 3 to be evicted next.
   ASSERT_EQ(3, lru_replacer.Evict());
   ASSERT_EQ(3, lru_replacer.Size());
+  // Now the ordering is [1, 5, 4], all of them have two access records.
 
   // Set 6 to be evictable. 6 Should be evicted next since it has the maximum backward k-distance.
   lru_replacer.SetEvictable(6, true);
   ASSERT_EQ(4, lru_replacer.Size());
   ASSERT_EQ(6, lru_replacer.Evict());
   ASSERT_EQ(3, lru_replacer.Size());
+  // Now the ordering is [1, 5, 4], all of them have two access records.
 
   // Mark frame 1 as non-evictable. We now have [5, 4].
   lru_replacer.SetEvictable(1, false);

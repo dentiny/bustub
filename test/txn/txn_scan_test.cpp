@@ -269,12 +269,8 @@ TEST(TxnScanTest, DISABLED_CollectUndoLogTest) {  // NOLINT
     ASSERT_TRUE(tuple.has_value());
     VerifyTuple(schema.get(), *tuple, {Int(2), Double(2.0), BoolNull()});
   }
-  {
-    ASSERT_FALSE(undo_logs_3_for_txn_to_inspect.has_value());
-  }
-  {
-    ASSERT_FALSE(undo_logs_4_for_txn_to_inspect.has_value());
-  }
+  { ASSERT_FALSE(undo_logs_3_for_txn_to_inspect.has_value()); }
+  { ASSERT_FALSE(undo_logs_4_for_txn_to_inspect.has_value()); }
   {
     ASSERT_TRUE(undo_logs_5_for_txn_to_inspect.has_value());
     auto tuple = ReconstructTuple(schema.get(), tuple_res_5.second, tuple_res_5.first, *undo_logs_5_for_txn_to_inspect);
