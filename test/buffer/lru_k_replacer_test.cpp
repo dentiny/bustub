@@ -121,4 +121,67 @@ TEST(LRUKReplacerTest, SampleTest) {
   lru_replacer.SetEvictable(6, true);
 }
 
+TEST(LRUKReplacerTest, ThreadSafeTest) {
+  // Initialize the replacer.
+  LRUKReplacer lru_replacer(/*num_frames=*/7, /*k=*/2);
+
+  // Add six frames to the replacer. We now have frames [1, 2, 3, 4]. We set frame 5 as non-evictable.
+  // Frame 1 and 2 is accessed twice, so evicted later; other frames are accessed only once.
+  std::vector<std::thread> thds;
+  thds.reserve(6);
+  thds.emplace_back([&]() {
+    lru_replacer.RecordAccess(1);
+    lru_replacer.RecordAccess(1);
+    lru_replacer.SetEvictable(1, true);
+  });
+  thds.emplace_back([&]() {
+    lru_replacer.RecordAccess(2);
+    lru_replacer.SetEvictable(2, true);
+    lru_replacer.RecordAccess(2);
+  });
+  thds.emplace_back([&]() {
+    lru_replacer.RecordAccess(3);
+    lru_replacer.SetEvictable(3, true);
+  });
+  thds.emplace_back([&]() {
+    lru_replacer.RecordAccess(4);
+    lru_replacer.SetEvictable(4, true);
+  });
+  thds.emplace_back([&]() {
+    lru_replacer.RecordAccess(5);
+    lru_replacer.SetEvictable(5, false);
+  });
+
+  // Join all threads.
+  for (auto &cur_thd : thds) {
+    cur_thd.join();
+  }
+
+  // Check eviction status, first two should be [3, 4], followed by [1, 2].
+  auto match_expect = [](std::optional<frame_id_t> actual1, std::optional<frame_id_t> actual2, frame_id_t expect1,
+                         frame_id_t expect2) {
+    EXPECT_TRUE(actual1.has_value());
+    EXPECT_TRUE(actual2.has_value());
+    EXPECT_TRUE((*actual1 == expect1 && *actual2 == expect2) || (*actual1 == expect2 && *actual2 == expect1));
+  };
+
+  // Check accessed-once frames.
+  {
+    auto actual1 = lru_replacer.Evict();
+    auto actual2 = lru_replacer.Evict();
+    match_expect(actual1, actual2, 3, 4);
+  }
+
+  // Check accessed-twice items.
+  {
+    auto actual1 = lru_replacer.Evict();
+    auto actual2 = lru_replacer.Evict();
+    match_expect(actual1, actual2, 1, 2);
+  }
+
+  EXPECT_FALSE(lru_replacer.Evict().has_value());
+
+  std::cerr << "ok!" << std::endl;
+}
+
 }  // namespace bustub

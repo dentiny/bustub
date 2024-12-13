@@ -22,6 +22,7 @@
 
 #include "common/config.h"
 #include "common/macros.h"
+#include "common/thread_annotation.h"
 
 namespace bustub {
 
@@ -37,6 +38,8 @@ enum class AccessType { Unknown = 0, Lookup, Scan, Index };
  * A frame with less than k historical references is given
  * +inf as its backward k-distance. When multiple frames have +inf backward k-distance,
  * classical LRU algorithm is used to choose victim.
+ *
+ * Replacer is thread-safe.
  */
 class LRUKReplacer {
  public:
@@ -125,7 +128,10 @@ class LRUKReplacer {
    *
    * @return size_t
    */
-  size_t Size() { return evictable_size_; }
+  size_t Size() {
+    std::lock_guard lck(latch_);
+    return evictable_size_;
+  }
 
  private:
   struct Record {
@@ -136,16 +142,16 @@ class LRUKReplacer {
   };
 
   // Frame id to its access records.
-  std::unordered_map<frame_id_t, Record> records_;
+  std::unordered_map<frame_id_t, Record> records_ GUARDED_BY(latch_);
   // New frames are placed at the front of the queue.
-  std::list<frame_id_t> lru_queue_;
+  std::list<frame_id_t> lru_queue_ GUARDED_BY(latch_);
   // Current timestamp, which is a monotonically increasing mark for each access record.
-  size_t current_timestamp_{0};
+  size_t current_timestamp_ GUARDED_BY(latch_) = 0;
   // Number of evictable frames.
-  size_t evictable_size_{0};
-  size_t replacer_size_;
-  size_t k_;
-  [[maybe_unused]] std::mutex latch_;
+  size_t evictable_size_ GUARDED_BY(latch_) = 0;
+  const size_t replacer_size_ = 0;
+  const size_t k_ = 0;
+  std::mutex latch_;
 };
 
 }  // namespace bustub

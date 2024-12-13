@@ -44,13 +44,15 @@ struct EvictionScore {
 LRUKReplacer::LRUKReplacer(size_t num_frames, size_t k) : replacer_size_(num_frames), k_(k) {}
 
 auto LRUKReplacer::Evict() -> std::optional<frame_id_t> {
-  if (evictable_size_ == 0) {
-    return std::nullopt;
-  }
   EvictionScore smallest_eviction_score{
       .earliest_access_timestamp = kMaxAccessTimestamp,
       .timestamp_distance = 0,
   };
+
+  std::lock_guard lck(latch_);
+  if (evictable_size_ == 0) {
+    return std::nullopt;
+  }
   frame_id_t frame_to_evict = 0;
   for (auto &[cur_frame_id, cur_record] : records_) {
     if (!cur_record.is_evictable) {
@@ -76,6 +78,7 @@ auto LRUKReplacer::Evict() -> std::optional<frame_id_t> {
 }
 
 void LRUKReplacer::RecordAccess(frame_id_t frame_id, [[maybe_unused]] AccessType access_type) {
+  std::lock_guard lck(latch_);
   BUSTUB_ASSERT_AND_LOG(frame_id < static_cast<frame_id_t>(replacer_size_));
   auto record_iter = records_.find(frame_id);
 
@@ -100,6 +103,7 @@ void LRUKReplacer::RecordAccess(frame_id_t frame_id, [[maybe_unused]] AccessType
 }
 
 void LRUKReplacer::SetEvictable(frame_id_t frame_id, bool set_evictable) {
+  std::lock_guard lck(latch_);
   auto record_iter = records_.find(frame_id);
   if (record_iter == records_.end()) {
     return;
@@ -114,6 +118,7 @@ void LRUKReplacer::SetEvictable(frame_id_t frame_id, bool set_evictable) {
 }
 
 void LRUKReplacer::Remove(frame_id_t frame_id) {
+  std::lock_guard lck(latch_);
   auto record_iter = records_.find(frame_id);
   BUSTUB_ASSERT_AND_LOG(record_iter != records_.end()) << "Frame id " << frame_id << " doesn't exist in replacer.";
   const auto &cur_record = record_iter->second;
